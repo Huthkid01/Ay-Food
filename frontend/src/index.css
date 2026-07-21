@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  /* A.Y Food Palace building colors */
+  --color-brand-gold: #FF6B00;
+  --color-brand-gold-dark: #E85D04;
+  --color-brand-green: #32CD32;
+  --color-brand-green-dark: #28A745;
+  --color-brand-dark: #0C0C0C;
+  --color-brand-dark-light: #1a1a1a;
+  --font-display: "Georgia", serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-brand-dark text-white antialiased;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-brand-gold to-brand-green bg-clip-text text-transparent;
+  }
+
+  /* 2-column product grid on mobile, 3 on desktop */
+  .food-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  @media (min-width: 1024px) {
+    .food-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+  }
+}
