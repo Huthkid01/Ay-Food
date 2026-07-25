@@ -52,6 +52,8 @@ export default function AdminSlidesPage() {
   const [form, setForm] = useState<HeroSlide>(emptySlide());
   const [uploading, setUploading] = useState(false);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
+  /** 1-based display order for the edit/add modal */
+  const [orderInput, setOrderInput] = useState(1);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: SITE_CONTENT_KEY,
@@ -63,23 +65,28 @@ export default function AdminSlidesPage() {
   }, [data]);
 
   const save = useMutation({
-    mutationFn: (next: SiteContent) => siteContentService.update(next),
-    onSuccess: (saved) => {
+    mutationFn: async (payload: { next: SiteContent; toastMsg?: string; keepModal?: boolean }) => {
+      const saved = await siteContentService.update(payload.next);
+      return { saved, toastMsg: payload.toastMsg, keepModal: payload.keepModal };
+    },
+    onSuccess: ({ saved, toastMsg, keepModal }) => {
       setDraft(saved);
       queryClient.setQueryData(SITE_CONTENT_KEY, saved);
-      setEditingIndex(null);
-      showToast('Slides saved', 'success');
+      if (!keepModal) setEditingIndex(null);
+      showToast(toastMsg ?? 'Slides saved', 'success');
     },
     onError: () => showToast('Could not save slides', 'error'),
   });
 
   const openCreate = () => {
     setForm(emptySlide());
-    setEditingIndex(-1); // -1 = new
+    setOrderInput(draft.heroSlides.length + 1);
+    setEditingIndex(-1);
   };
 
   const openEdit = (index: number) => {
     setForm({ ...draft.heroSlides[index], active: draft.heroSlides[index].active !== false });
+    setOrderInput(index + 1);
     setEditingIndex(index);
   };
 
@@ -88,10 +95,13 @@ export default function AdminSlidesPage() {
     setEditingIndex(null);
   };
 
-  const persistSlides = (heroSlides: HeroSlide[]) => {
+  const persistSlides = (
+    heroSlides: HeroSlide[],
+    opts?: { toastMsg?: string; keepModal?: boolean },
+  ) => {
     const next = { ...draft, heroSlides };
     setDraft(next);
-    save.mutate(next);
+    save.mutate({ next, toastMsg: opts?.toastMsg, keepModal: opts?.keepModal });
   };
 
   const saveModal = () => {
@@ -103,17 +113,30 @@ export default function AdminSlidesPage() {
       showToast('Add an image or image URL', 'error');
       return;
     }
-    const slides = [...draft.heroSlides];
+    let slides = [...draft.heroSlides];
+    let fromIndex: number;
+
     if (editingIndex === -1) {
       if (slides.length >= 6) {
         showToast('Maximum 6 slides', 'error');
         return;
       }
       slides.push(form);
+      fromIndex = slides.length - 1;
     } else if (editingIndex !== null) {
       slides[editingIndex] = form;
+      fromIndex = editingIndex;
+    } else {
+      return;
     }
-    persistSlides(slides);
+
+    const toIndex = Math.min(Math.max(Math.round(orderInput) - 1, 0), slides.length - 1);
+    if (fromIndex !== toIndex) {
+      const [item] = slides.splice(fromIndex, 1);
+      slides.splice(toIndex, 0, item);
+    }
+
+    persistSlides(slides, { toastMsg: 'Slide saved' });
   };
 
   const confirmDelete = () => {
@@ -125,7 +148,7 @@ export default function AdminSlidesPage() {
     }
     const heroSlides = draft.heroSlides.filter((_, i) => i !== deleteIndex);
     setDeleteIndex(null);
-    persistSlides(heroSlides);
+    persistSlides(heroSlides, { toastMsg: 'Slide deleted' });
   };
 
   const uploadHeroImage = async (file: File) => {
@@ -154,11 +177,21 @@ export default function AdminSlidesPage() {
   };
 
   const moveSlide = (from: number, to: number) => {
-    if (to < 0 || to >= draft.heroSlides.length) return;
+    if (to < 0 || to >= draft.heroSlides.length || from === to) return;
     const heroSlides = [...draft.heroSlides];
     const [item] = heroSlides.splice(from, 1);
     heroSlides.splice(to, 0, item);
-    persistSlides(heroSlides);
+
+    if (editingIndex !== null && editingIndex >= 0) {
+      let nextEdit = editingIndex;
+      if (editingIndex === from) nextEdit = to;
+      else if (from < editingIndex && to >= editingIndex) nextEdit -= 1;
+      else if (from > editingIndex && to <= editingIndex) nextEdit += 1;
+      setEditingIndex(nextEdit);
+      setOrderInput(nextEdit + 1);
+    }
+
+    persistSlides(heroSlides, { toastMsg: 'Slide order updated', keepModal: true });
   };
 
   if (isLoading) {
@@ -212,8 +245,33 @@ export default function AdminSlidesPage() {
             return (
               <div
                 key={`${slide.image}-${index}`}
-                className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-brand-dark-light/60 p-3 sm:flex-nowrap sm:p-4"
+                className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-brand-dark-light/60 p-3 sm:flex-nowrap sm:gap-4 sm:p-4"
               >
+                <div className="flex shrink-0 flex-col gap-1">
+                  <button
+                    type="button"
+                    disabled={index === 0 || save.isPending}
+                    onClick={() => moveSlide(index, index - 1)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2 py-1.5 text-xs font-medium text-white/70 hover:border-brand-gold hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-30"
+                    title="Move up"
+                  >
+                    <ChevronUp size={14} />
+                    <span className="hidden sm:inline">Up</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={index === draft.heroSlides.length - 1 || save.isPending}
+                    onClick={() => moveSlide(index, index + 1)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2 py-1.5 text-xs font-medium text-white/70 hover:border-brand-gold hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-30"
+                    title="Move down"
+                  >
+                    <ChevronDown size={14} />
+                    <span className="hidden sm:inline">Down</span>
+                  </button>
+                </div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-brand-dark text-sm font-bold text-brand-gold">
+                  {index + 1}
+                </div>
                 <div className="h-16 w-28 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-brand-dark sm:h-20 sm:w-36">
                   {slide.image ? (
                     <img src={slide.image} alt="" className="h-full w-full object-cover" />
@@ -232,33 +290,12 @@ export default function AdminSlidesPage() {
                     >
                       {active ? 'Active' : 'Inactive'}
                     </span>
-                    <span className="text-xs text-white/35">Order {index + 1}</span>
                   </div>
                   {slide.description ? (
                     <p className="mt-1 line-clamp-1 text-sm text-white/45">{slide.description}</p>
                   ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-                  <div className="mr-1 flex flex-col">
-                    <button
-                      type="button"
-                      disabled={index === 0 || save.isPending}
-                      onClick={() => moveSlide(index, index - 1)}
-                      className="rounded p-0.5 text-white/40 hover:text-white disabled:opacity-30"
-                      title="Move up"
-                    >
-                      <ChevronUp size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === draft.heroSlides.length - 1 || save.isPending}
-                      onClick={() => moveSlide(index, index + 1)}
-                      className="rounded p-0.5 text-white/40 hover:text-white disabled:opacity-30"
-                      title="Move down"
-                    >
-                      <ChevronDown size={14} />
-                    </button>
-                  </div>
                   <a
                     href={slide.primaryCta.to || '/'}
                     target="_blank"
@@ -454,6 +491,24 @@ export default function AdminSlidesPage() {
                       }))
                     }
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/60">Display order</label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={isNew ? draft.heroSlides.length + 1 : draft.heroSlides.length}
+                    className="w-24 rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                    value={orderInput}
+                    onChange={(e) => setOrderInput(Number(e.target.value) || 1)}
+                  />
+                  <span className="text-xs text-white/40">
+                    1 = first on homepage · {isNew ? draft.heroSlides.length + 1 : draft.heroSlides.length}{' '}
+                    total
+                  </span>
                 </div>
               </div>
 
