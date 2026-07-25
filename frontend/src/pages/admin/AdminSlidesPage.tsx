@@ -1,7 +1,20 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Upload } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  Eye,
+  Images,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
+import { ConfirmModal } from '../../components/admin/DeleteConfirmModal';
 import {
   DEFAULT_SITE_CONTENT,
   SITE_CONTENT_KEY,
@@ -10,10 +23,7 @@ import {
 } from '../../services/site-content.service';
 import { storageService } from '../../services/storage.service';
 import type { HeroSlide } from '../../utils/food-images';
-
-const fieldClass =
-  'w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold';
-const labelClass = 'mb-1 block text-sm text-white/60';
+import { cn } from '../../utils/helpers';
 
 function emptySlide(): HeroSlide {
   return {
@@ -25,15 +35,25 @@ function emptySlide(): HeroSlide {
     primaryCta: { label: 'Browse Menu', to: '/menu' },
     secondaryCta: { label: 'Build Pack', to: '/build' },
     imagePosition: 'center',
+    active: true,
   };
+}
+
+function slideTitle(slide: HeroSlide) {
+  const t = [slide.title, slide.highlight].filter(Boolean).join(' ').trim();
+  return t || slide.tagline || 'Untitled slide';
 }
 
 export default function AdminSlidesPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [draft, setDraft] = useState<SiteContent>(DEFAULT_SITE_CONTENT);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [form, setForm] = useState<HeroSlide>(emptySlide());
+  const [uploading, setUploading] = useState(false);
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: SITE_CONTENT_KEY,
     queryFn: () => siteContentService.get(),
   });
@@ -43,16 +63,72 @@ export default function AdminSlidesPage() {
   }, [data]);
 
   const save = useMutation({
-    mutationFn: () => siteContentService.update(draft),
+    mutationFn: (next: SiteContent) => siteContentService.update(next),
     onSuccess: (saved) => {
       setDraft(saved);
       queryClient.setQueryData(SITE_CONTENT_KEY, saved);
-      showToast('Slides saved successfully', 'success');
+      setEditingIndex(null);
+      showToast('Slides saved', 'success');
     },
     onError: () => showToast('Could not save slides', 'error'),
   });
 
-  const uploadHeroImage = async (index: number, file: File) => {
+  const openCreate = () => {
+    setForm(emptySlide());
+    setEditingIndex(-1); // -1 = new
+  };
+
+  const openEdit = (index: number) => {
+    setForm({ ...draft.heroSlides[index], active: draft.heroSlides[index].active !== false });
+    setEditingIndex(index);
+  };
+
+  const closeModal = () => {
+    if (save.isPending || uploading) return;
+    setEditingIndex(null);
+  };
+
+  const persistSlides = (heroSlides: HeroSlide[]) => {
+    const next = { ...draft, heroSlides };
+    setDraft(next);
+    save.mutate(next);
+  };
+
+  const saveModal = () => {
+    if (!form.title.trim() && !form.highlight?.trim()) {
+      showToast('Title is required', 'error');
+      return;
+    }
+    if (!form.image.trim()) {
+      showToast('Add an image or image URL', 'error');
+      return;
+    }
+    const slides = [...draft.heroSlides];
+    if (editingIndex === -1) {
+      if (slides.length >= 6) {
+        showToast('Maximum 6 slides', 'error');
+        return;
+      }
+      slides.push(form);
+    } else if (editingIndex !== null) {
+      slides[editingIndex] = form;
+    }
+    persistSlides(slides);
+  };
+
+  const confirmDelete = () => {
+    if (deleteIndex === null) return;
+    if (draft.heroSlides.length <= 1) {
+      showToast('Keep at least one slide', 'error');
+      setDeleteIndex(null);
+      return;
+    }
+    const heroSlides = draft.heroSlides.filter((_, i) => i !== deleteIndex);
+    setDeleteIndex(null);
+    persistSlides(heroSlides);
+  };
+
+  const uploadHeroImage = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       showToast('Please choose an image file', 'error');
       return;
@@ -61,235 +137,384 @@ export default function AdminSlidesPage() {
       showToast('Image must be under 5MB', 'error');
       return;
     }
+    setUploading(true);
     try {
       const url = await storageService.uploadFile(
         'food-images',
         `hero/${Date.now()}-${file.name.replace(/\s+/g, '-')}`,
-        file
+        file,
       );
-      setDraft((d) => {
-        const heroSlides = [...d.heroSlides];
-        heroSlides[index] = { ...heroSlides[index], image: url };
-        return { ...d, heroSlides };
-      });
-      showToast('Hero image uploaded', 'success');
+      setForm((f) => ({ ...f, image: url }));
+      showToast('Image uploaded', 'success');
     } catch {
       showToast('Could not upload image', 'error');
+    } finally {
+      setUploading(false);
     }
+  };
+
+  const moveSlide = (from: number, to: number) => {
+    if (to < 0 || to >= draft.heroSlides.length) return;
+    const heroSlides = [...draft.heroSlides];
+    const [item] = heroSlides.splice(from, 1);
+    heroSlides.splice(to, 0, item);
+    persistSlides(heroSlides);
   };
 
   if (isLoading) {
     return <div className="h-40 animate-pulse rounded-2xl bg-brand-dark-light" />;
   }
 
+  const modalOpen = editingIndex !== null;
+  const isNew = editingIndex === -1;
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold">Slide Management</h1>
+          <h1 className="flex items-center gap-2 font-display text-3xl font-bold">
+            <Images className="text-brand-gold" size={28} />
+            Slider Management
+          </h1>
           <p className="mt-1 text-sm text-white/50">
-            Manage homepage hero carousel images, titles, and CTAs.
+            Manage homepage hero sliders shown on the website.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => save.mutate()}
-          disabled={save.isPending}
-          className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {save.isPending ? 'Saving…' : 'Save Slides'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white/70 hover:border-white/30 hover:text-white disabled:opacity-50"
+            aria-label="Refresh"
+          >
+            <RefreshCw size={16} className={cn(isFetching && 'animate-spin')} />
+          </button>
+          <button
+            type="button"
+            onClick={openCreate}
+            disabled={draft.heroSlides.length >= 6}
+            className="inline-flex items-center gap-2 rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            <Plus size={16} /> Add Slider
+          </button>
+        </div>
       </div>
 
-      <div className="space-y-6">
-        {draft.heroSlides.map((slide, index) => (
-          <div key={index} className="rounded-2xl border border-white/10 bg-brand-dark-light/40 p-4 sm:p-5">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <h3 className="font-semibold">Slide {index + 1}</h3>
-              {draft.heroSlides.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) => ({
-                      ...d,
-                      heroSlides: d.heroSlides.filter((_, i) => i !== index),
-                    }))
-                  }
-                  className="rounded-lg border border-white/10 p-2 text-white/60 hover:text-red-400"
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
+      <div className="space-y-3">
+        {draft.heroSlides.length === 0 ? (
+          <p className="rounded-2xl border border-white/10 bg-brand-dark-light p-8 text-center text-white/50">
+            No sliders yet. Click Add Slider to create one.
+          </p>
+        ) : (
+          draft.heroSlides.map((slide, index) => {
+            const active = slide.active !== false;
+            return (
+              <div
+                key={`${slide.image}-${index}`}
+                className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-brand-dark-light/60 p-3 sm:flex-nowrap sm:p-4"
+              >
+                <div className="h-16 w-28 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-brand-dark sm:h-20 sm:w-36">
+                  {slide.image ? (
+                    <img src={slide.image} alt="" className="h-full w-full object-cover" />
+                  ) : null}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-semibold">{slideTitle(slide)}</p>
+                    <span
+                      className={cn(
+                        'rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
+                        active
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : 'bg-white/10 text-white/50',
+                      )}
+                    >
+                      {active ? 'Active' : 'Inactive'}
+                    </span>
+                    <span className="text-xs text-white/35">Order {index + 1}</span>
+                  </div>
+                  {slide.description ? (
+                    <p className="mt-1 line-clamp-1 text-sm text-white/45">{slide.description}</p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                  <div className="mr-1 flex flex-col">
+                    <button
+                      type="button"
+                      disabled={index === 0 || save.isPending}
+                      onClick={() => moveSlide(index, index - 1)}
+                      className="rounded p-0.5 text-white/40 hover:text-white disabled:opacity-30"
+                      title="Move up"
+                    >
+                      <ChevronUp size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === draft.heroSlides.length - 1 || save.isPending}
+                      onClick={() => moveSlide(index, index + 1)}
+                      className="rounded p-0.5 text-white/40 hover:text-white disabled:opacity-30"
+                      title="Move down"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
+                  <a
+                    href={slide.primaryCta.to || '/'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg p-2 text-white/50 hover:bg-white/5 hover:text-white"
+                    title="Open CTA link"
+                  >
+                    <ExternalLink size={16} />
+                  </a>
+                  <a
+                    href="/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg p-2 text-white/50 hover:bg-white/5 hover:text-white"
+                    title="View homepage"
+                  >
+                    <Eye size={16} />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => openEdit(index)}
+                    className="rounded-lg p-2 text-sky-400 hover:bg-sky-500/10"
+                    title="Edit"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteIndex(index)}
+                    className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"
+                    title="Delete"
+                    disabled={draft.heroSlides.length <= 1}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default"
+            aria-label="Close"
+            onClick={closeModal}
+          />
+          <div className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-[#0b1628] sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <h2 className="text-lg font-semibold">{isNew ? 'Add Slider' : 'Edit Slider'}</h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-lg p-1.5 text-white/50 hover:bg-white/5 hover:text-white"
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            <div className="mb-4 flex flex-wrap items-start gap-4">
-              <div className="h-24 w-40 overflow-hidden rounded-xl border border-white/10 bg-brand-dark">
-                {slide.image ? (
-                  <img src={slide.image} alt="" className="h-full w-full object-cover" />
-                ) : null}
+            <div className="space-y-4 overflow-y-auto px-5 py-4">
+              <div className="aspect-[16/9] overflow-hidden rounded-xl border border-white/10 bg-brand-dark">
+                {form.image ? (
+                  <img src={form.image} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-white/40">
+                    No image
+                  </div>
+                )}
               </div>
-              <div className="min-w-0 flex-1 space-y-2">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm hover:border-brand-gold hover:text-brand-gold">
-                  <Upload size={16} />
-                  Upload image
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                      const file = e.target.files?.[0];
-                      if (file) void uploadHeroImage(index, file);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/60">Image URL</label>
                 <input
-                  className={fieldClass}
-                  value={slide.image}
-                  onChange={(e) =>
-                    setDraft((d) => {
-                      const heroSlides = [...d.heroSlides];
-                      heroSlides[index] = { ...heroSlides[index], image: e.target.value };
-                      return { ...d, heroSlides };
-                    })
-                  }
-                  placeholder="Image URL or /assets/..."
+                  className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                  value={form.image}
+                  onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
+                  placeholder="https://… or /assets/…"
                 />
               </div>
-            </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(
-                [
-                  ['tagline', 'Tagline'],
-                  ['imagePosition', 'Image position'],
-                  ['title', 'Title'],
-                  ['highlight', 'Highlight'],
-                ] as const
-              ).map(([key, label]) => (
-                <div key={key}>
-                  <label className={labelClass}>{label}</label>
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 px-4 py-6 text-sm text-white/60 hover:border-brand-gold hover:text-brand-gold">
+                <Upload size={20} />
+                {uploading ? 'Uploading…' : '+ Upload image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    const file = e.target.files?.[0];
+                    if (file) void uploadHeroImage(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-white/60">Title *</label>
                   <input
-                    className={fieldClass}
-                    value={
-                      key === 'imagePosition'
-                        ? (slide.imagePosition ?? 'center')
-                        : key === 'highlight'
-                          ? (slide.highlight ?? '')
-                          : slide[key]
-                    }
+                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                    value={form.title}
+                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-white/60">Highlight</label>
+                  <input
+                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                    value={form.highlight ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, highlight: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/60">Tagline</label>
+                <input
+                  className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                  value={form.tagline}
+                  onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
+                  placeholder="Optional eyebrow text"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-white/60">Description</label>
+                <textarea
+                  rows={3}
+                  className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Optional tagline shown on the slide"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-white/60">Primary CTA label</label>
+                  <input
+                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                    value={form.primaryCta.label}
                     onChange={(e) =>
-                      setDraft((d) => {
-                        const heroSlides = [...d.heroSlides];
-                        heroSlides[index] = { ...heroSlides[index], [key]: e.target.value };
-                        return { ...d, heroSlides };
-                      })
+                      setForm((f) => ({
+                        ...f,
+                        primaryCta: { ...f.primaryCta, label: e.target.value },
+                      }))
                     }
                   />
                 </div>
-              ))}
-              <div className="sm:col-span-2">
-                <label className={labelClass}>Description</label>
-                <textarea
-                  rows={3}
-                  className={fieldClass}
-                  value={slide.description}
-                  onChange={(e) =>
-                    setDraft((d) => {
-                      const heroSlides = [...d.heroSlides];
-                      heroSlides[index] = { ...heroSlides[index], description: e.target.value };
-                      return { ...d, heroSlides };
-                    })
-                  }
-                />
+                <div>
+                  <label className="mb-1 block text-sm text-white/60">URL / link</label>
+                  <input
+                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                    value={form.primaryCta.to}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        primaryCta: { ...f.primaryCta, to: e.target.value },
+                      }))
+                    }
+                    placeholder="/menu"
+                  />
+                </div>
               </div>
-              <div>
-                <label className={labelClass}>Primary CTA label</label>
-                <input
-                  className={fieldClass}
-                  value={slide.primaryCta.label}
-                  onChange={(e) =>
-                    setDraft((d) => {
-                      const heroSlides = [...d.heroSlides];
-                      heroSlides[index] = {
-                        ...heroSlides[index],
-                        primaryCta: { ...heroSlides[index].primaryCta, label: e.target.value },
-                      };
-                      return { ...d, heroSlides };
-                    })
-                  }
-                />
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-white/60">Secondary CTA label</label>
+                  <input
+                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                    value={form.secondaryCta.label}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        secondaryCta: { ...f.secondaryCta, label: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-white/60">Secondary CTA link</label>
+                  <input
+                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                    value={form.secondaryCta.to}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        secondaryCta: { ...f.secondaryCta, to: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
               </div>
-              <div>
-                <label className={labelClass}>Primary CTA link</label>
-                <input
-                  className={fieldClass}
-                  value={slide.primaryCta.to}
-                  onChange={(e) =>
-                    setDraft((d) => {
-                      const heroSlides = [...d.heroSlides];
-                      heroSlides[index] = {
-                        ...heroSlides[index],
-                        primaryCta: { ...heroSlides[index].primaryCta, to: e.target.value },
-                      };
-                      return { ...d, heroSlides };
-                    })
+
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-[#07111f] px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">Active</p>
+                  <p className="text-xs text-white/40">Inactive slides are hidden on the site</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.active !== false}
+                  onClick={() =>
+                    setForm((f) => ({ ...f, active: !(f.active !== false) }))
                   }
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Secondary CTA label</label>
-                <input
-                  className={fieldClass}
-                  value={slide.secondaryCta.label}
-                  onChange={(e) =>
-                    setDraft((d) => {
-                      const heroSlides = [...d.heroSlides];
-                      heroSlides[index] = {
-                        ...heroSlides[index],
-                        secondaryCta: {
-                          ...heroSlides[index].secondaryCta,
-                          label: e.target.value,
-                        },
-                      };
-                      return { ...d, heroSlides };
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Secondary CTA link</label>
-                <input
-                  className={fieldClass}
-                  value={slide.secondaryCta.to}
-                  onChange={(e) =>
-                    setDraft((d) => {
-                      const heroSlides = [...d.heroSlides];
-                      heroSlides[index] = {
-                        ...heroSlides[index],
-                        secondaryCta: { ...heroSlides[index].secondaryCta, to: e.target.value },
-                      };
-                      return { ...d, heroSlides };
-                    })
-                  }
-                />
+                  className={cn(
+                    'relative h-7 w-12 rounded-full transition-colors',
+                    form.active !== false ? 'bg-emerald-500' : 'bg-white/20',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white transition-transform',
+                      form.active !== false && 'translate-x-5',
+                    )}
+                  />
+                </button>
               </div>
             </div>
-          </div>
-        ))}
 
-        {draft.heroSlides.length < 6 && (
-          <button
-            type="button"
-            onClick={() =>
-              setDraft((d) => ({ ...d, heroSlides: [...d.heroSlides, emptySlide()] }))
-            }
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2.5 text-sm font-semibold"
-          >
-            <Plus size={16} /> Add slide
-          </button>
-        )}
-      </div>
+            <div className="flex justify-end gap-3 border-t border-white/10 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-full border border-white/20 px-5 py-2.5 text-sm"
+                disabled={save.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveModal}
+                disabled={save.isPending || uploading}
+                className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {save.isPending ? 'Saving…' : isNew ? 'Add Slider' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal
+        open={deleteIndex !== null}
+        title="Delete slider?"
+        message="This removes the slide from the homepage carousel. You can add a new one later."
+        confirmLabel="Yes, delete"
+        loading={save.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setDeleteIndex(null)}
+      />
     </div>
   );
 }

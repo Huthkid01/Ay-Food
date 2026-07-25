@@ -6,7 +6,6 @@ import {
   Tags,
   Users,
   Eye,
-  Settings,
   Images,
   Wrench,
   LogOut,
@@ -15,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  ChevronUp,
   House,
   PanelsTopLeft,
   Info,
@@ -26,6 +24,7 @@ import {
   Moon,
   Sun,
   BarChart3,
+  LayoutTemplate,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -41,10 +40,11 @@ const navItemsBeforeContent = [
   { href: '/admin/categories', label: 'Categories', icon: Tags },
   { href: '/admin/customers', label: 'Customers', icon: Users },
   { href: '/admin/visitors', label: 'Site Visits', icon: Eye },
-  { href: '/admin/slides', label: 'Slide Management', icon: Images },
 ];
 
-const siteContentItems = [
+/** Nested under Content Management (I-Coffee style). */
+const contentManagementItems = [
+  { href: '/admin/slides', label: 'Slider Management', icon: Images },
   { href: '/admin/content/homepage', label: 'Homepage', icon: House },
   { href: '/admin/content/footer', label: 'Footer', icon: PanelsTopLeft },
   { href: '/admin/content/about', label: 'About Page', icon: Info },
@@ -72,7 +72,9 @@ function AdminLayoutShell() {
   const location = useLocation();
   useAdminRealtime();
 
-  const contentMenuActive = location.pathname.startsWith('/admin/content');
+  const contentMenuActive =
+    location.pathname.startsWith('/admin/content') ||
+    location.pathname.startsWith('/admin/slides');
   const [contentMenuOpen, setContentMenuOpen] = useState(contentMenuActive);
 
   useEffect(() => {
@@ -100,7 +102,7 @@ function AdminLayoutShell() {
 
   const updateContentFlyoutPosition = (event: React.MouseEvent<HTMLElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const estimatedFlyoutHeight = 360;
+    const estimatedFlyoutHeight = 420;
     const viewportPadding = 16;
     const nextTop = Math.max(
       viewportPadding,
@@ -147,13 +149,38 @@ function AdminLayoutShell() {
     );
   };
 
+  const renderContentChild = (item: (typeof contentManagementItems)[number]) => {
+    const Icon = item.icon;
+    const active =
+      item.href === '/admin/slides'
+        ? location.pathname.startsWith('/admin/slides')
+        : location.pathname === item.href;
+    return (
+      <Link
+        key={item.href}
+        to={item.href}
+        onClick={() => {
+          setMobileOpen(false);
+          setContentFlyoutTop(null);
+        }}
+        className={cn(
+          'flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+          active ? activeNavClass : idleNavClass,
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{item.label}</span>
+      </Link>
+    );
+  };
+
   const sidebar = (
     <div className="flex h-full flex-col">
       <div
         className={cn(
           'border-b',
           isDark ? 'border-[#18263b]' : 'border-slate-200',
-          collapsed ? 'px-3 py-5' : 'p-6',
+          collapsed ? 'px-3 py-5' : 'p-5',
         )}
       >
         <div
@@ -169,19 +196,11 @@ function AdminLayoutShell() {
             )}
           >
             <div className={cn(collapsed && 'lg:hidden')}>
-              <p
-                className={cn(
-                  'text-[11px] font-semibold tracking-[0.18em] uppercase',
-                  isDark ? 'text-amber-500/90' : 'text-[#FF6B00]',
-                )}
-              >
+              <p className={cn('text-base font-bold', isDark ? 'text-white' : 'text-slate-900')}>
                 Admin Panel
               </p>
-              <Link
-                to="/admin"
-                className="mt-2 block font-display text-xl font-bold"
-              >
-                Ay <span className="text-[#FF6B00]">Food</span>
+              <Link to="/admin" className="mt-0.5 block text-sm text-slate-500">
+                AY FOOD
               </Link>
             </div>
             <Link
@@ -197,7 +216,6 @@ function AdminLayoutShell() {
             </Link>
           </div>
 
-          {/* Circled in NexLogs: collapse control lives on the sidebar */}
           <button
             type="button"
             onClick={() => {
@@ -231,6 +249,25 @@ function AdminLayoutShell() {
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {!collapsed && (
+          <div
+            className={cn(
+              'mt-4 flex items-center gap-3 rounded-xl border px-3 py-2.5',
+              isDark ? 'border-[#18263b] bg-[#081624]' : 'border-slate-200 bg-slate-50',
+            )}
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF6B00] text-sm font-bold text-white">
+              {(user?.firstName?.[0] || 'A').toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-slate-500">Logged in as</p>
+              <p className="truncate text-sm font-semibold uppercase tracking-wide">
+                {user?.firstName || 'Ay Food'} {user?.lastName || 'Admin'}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-x-visible overflow-y-auto p-3">
@@ -248,7 +285,7 @@ function AdminLayoutShell() {
               setContentMenuOpen((open) => !open);
               hideTooltip();
             }}
-            onMouseEnter={(e) => showTooltip(e, 'Site Content', { showStateIcon: true })}
+            onMouseEnter={(e) => showTooltip(e, 'Content Management', { showStateIcon: true })}
             onMouseLeave={hideTooltip}
             className={cn(
               'group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
@@ -256,45 +293,18 @@ function AdminLayoutShell() {
               contentMenuActive ? activeNavClass : idleNavClass,
             )}
           >
-            <Settings className="h-4 w-4 shrink-0" />
-            <span className={cn('truncate', collapsed && 'lg:hidden')}>Site Content</span>
+            <LayoutTemplate className="h-4 w-4 shrink-0" />
+            <span className={cn('truncate', collapsed && 'lg:hidden')}>Content Management</span>
             {contentMenuOpen ? (
-              <ChevronUp className={cn('ml-auto h-4 w-4', collapsed && 'lg:hidden')} />
-            ) : (
               <ChevronDown className={cn('ml-auto h-4 w-4', collapsed && 'lg:hidden')} />
+            ) : (
+              <ChevronRight className={cn('ml-auto h-4 w-4', collapsed && 'lg:hidden')} />
             )}
           </button>
 
           {contentMenuOpen && !collapsed && (
-            <div
-              className={cn(
-                'ml-3 max-h-80 space-y-1 overflow-y-auto rounded-2xl border px-2 py-2',
-                isDark
-                  ? 'border-[#18263b] bg-[#0a1628]'
-                  : 'border-slate-200 bg-slate-50',
-              )}
-            >
-              {siteContentItems.map((item) => {
-                const Icon = item.icon;
-                const active = location.pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    onClick={() => {
-                      setMobileOpen(false);
-                      setContentFlyoutTop(null);
-                    }}
-                    className={cn(
-                      'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                      active ? activeNavClass : idleNavClass,
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {item.label}
-                  </Link>
-                );
-              })}
+            <div className="ml-2 space-y-0.5 border-l border-white/10 pl-2">
+              {contentManagementItems.map(renderContentChild)}
             </div>
           )}
         </div>
@@ -304,9 +314,8 @@ function AdminLayoutShell() {
 
       <div className={cn('border-t p-3', isDark ? 'border-[#18263b]' : 'border-slate-200')}>
         {!collapsed && (
-          <p className={cn('mb-2 truncate px-2 text-xs', isDark ? 'text-slate-500' : 'text-slate-500')}>
-            {user?.firstName} {user?.lastName}
-            <span className="text-slate-400"> (Admin)</span>
+          <p className={cn('mb-2 px-2 text-[11px]', isDark ? 'text-slate-500' : 'text-slate-500')}>
+            v1.0.0 · Ay Food
           </p>
         )}
         <button
@@ -380,26 +389,9 @@ function AdminLayoutShell() {
           style={{ top: contentFlyoutTop }}
         >
           <p className="px-2 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
-            Site Content
+            Content Management
           </p>
-          {siteContentItems.map((item) => {
-            const Icon = item.icon;
-            const active = location.pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                onClick={closeFlyouts}
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                  active ? activeNavClass : idleNavClass,
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {item.label}
-              </Link>
-            );
-          })}
+          {contentManagementItems.map(renderContentChild)}
         </div>
       )}
 
@@ -435,7 +427,6 @@ function AdminLayoutShell() {
           </h1>
           <div className="flex-1" />
 
-          {/* Circled in NexLogs: Light Mode / Dark Mode toggle */}
           <button
             type="button"
             onClick={toggleTheme}

@@ -44,6 +44,7 @@ function mergeHeroSlide(base: HeroSlide, patch: unknown): HeroSlide {
     },
     imagePosition:
       typeof patch.imagePosition === 'string' ? patch.imagePosition : base.imagePosition,
+    active: typeof patch.active === 'boolean' ? patch.active : (base.active ?? true),
   };
 }
 

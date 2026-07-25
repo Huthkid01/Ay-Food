@@ -78,6 +78,8 @@ export interface HeroSlide {
   primaryCta: { label: string; to: string };
   secondaryCta: { label: string; to: string };
   imagePosition?: string;
+  /** When false, slide is hidden on the storefront. Default true. */
+  active?: boolean;
 }
 
 export const HERO_SLIDES: HeroSlide[] = [

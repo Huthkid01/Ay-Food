@@ -8,7 +8,7 @@ const SLIDE_INTERVAL = 3000;
 
 export function HeroCarousel() {
   const content = useSiteContentData();
-  const slides = content.heroSlides;
+  const slides = content.heroSlides.filter((s) => s.active !== false);
   const [current, setCurrent] = useState(0);
   const [direction, setDirection] = useState(1);
   const [isPaused, setIsPaused] = useState(false);
