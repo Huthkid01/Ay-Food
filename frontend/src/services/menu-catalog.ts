@@ -88,7 +88,6 @@ function mapSupabaseFood(row: {
       image: row.image,
       slug: row.slug,
       category: {
-        name: row.categories?.name ?? 'Uncategorized',
         slug: row.categories?.slug ?? 'uncategorized',
       },
     }),

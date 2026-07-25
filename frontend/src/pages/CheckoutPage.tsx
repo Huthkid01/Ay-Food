@@ -36,7 +36,7 @@ type CheckoutForm = z.infer<typeof checkoutSchema>;
 type CartSnapshotItem = {
   id: string;
   foodId: string;
-  foodPortionId: string;
+  foodPortionId?: string;
   foodName: string;
   portionName: string;
   quantity: number;
