@@ -51,27 +51,39 @@ const emptyStats = (): SiteVisitorStats => ({
 /** Site visits are database-only (Supabase). No localStorage analytics. */
 export const siteVisitService = {
   async record(path: string, options?: { heartbeat?: boolean }) {
-    if (path.startsWith('/admin') || path.startsWith('/formsubmit-ok')) return;
-    // Admin panel traffic must never appear in Site Visits
-    if (getAdminToken()) return;
-    if (!isSupabaseConfigured()) return;
+    try {
+      if (path.startsWith('/admin') || path.startsWith('/formsubmit-ok')) return;
+      if (getAdminToken()) return;
+      if (!isSupabaseConfigured()) return;
 
-    const heartbeat = options?.heartbeat ?? false;
-    const sessionId = getVisitorSessionId();
-    const location: VisitorLocation = await getVisitorLocation();
+      const heartbeat = options?.heartbeat ?? false;
+      const sessionId = getVisitorSessionId();
+      if (!sessionId || sessionId.length < 8) return;
 
-    // Re-check after await — admin may have signed in while location resolved
-    if (getAdminToken()) return;
+      const location: VisitorLocation = await getVisitorLocation();
 
-    await supabase.rpc('record_site_visit', {
-      p_session_id: sessionId,
-      p_path: path,
-      p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-      p_country: location.country,
-      p_region: location.region,
-      p_city: location.city,
-      p_heartbeat: heartbeat,
-    });
+      // Re-check after await — admin may have signed in while location resolved
+      if (getAdminToken()) return;
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
+        return;
+      }
+
+      const { error } = await supabase.rpc('record_site_visit', {
+        p_session_id: sessionId,
+        p_path: path.slice(0, 500),
+        p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 500) : null,
+        p_country: location.country,
+        p_region: location.region,
+        p_city: location.city,
+        p_heartbeat: heartbeat,
+      });
+      if (error) {
+        // Soft-fail — never break the storefront
+        console.warn('[site-visit]', error.message);
+      }
+    } catch (err) {
+      console.warn('[site-visit]', err);
+    }
   },
 
   /** Remove this browser's visit row(s) after admin login / session restore. */

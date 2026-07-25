@@ -1,0 +1,9 @@
+# Ay Food Mega Palace — https://www.ayfoodpalace.com
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /login
+Disallow: /formsubmit-ok
+
+Sitemap: https://www.ayfoodpalace.com/sitemap.xml

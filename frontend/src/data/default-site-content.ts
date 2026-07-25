@@ -120,7 +120,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     legalName: 'A.Y Food Mega Palace',
     tagline:
       'Build your perfect meal pack with authentic Nigerian cuisine. Located in Ogijo, Ikorodu — order online with delivery or pickup.',
-    address: 'A.Y Food Mega Palace, Ogijo, Ikorodu, Lagos',
+    address: 'Omoleye bustop, Ogijo, Ikorodu–Shagamu Road',
     phone: '+234 817 309 7933',
     email: 'contact@ayfoodpalace.com',
     hours: 'Mon–Sun · 9:00 AM – 10:00 PM',
@@ -208,6 +208,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     paragraphs: [
       'A.Y Food Mega Palace serves authentic Nigerian cuisine in Ogijo, Ikorodu — from smoky jollof and swallow to pepper soup and fresh sides.',
       'Order online, build your custom meal pack, and enjoy delivery or pickup. No account needed.',
+      'Find us at Omoleye bustop, Ogijo, along the Ikorodu–Shagamu Road. We look forward to welcoming you.',
     ],
   },
   faq: {

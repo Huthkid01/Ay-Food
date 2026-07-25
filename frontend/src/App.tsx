@@ -7,6 +7,7 @@ import { ToastProvider } from './components/ui/Toast';
 import { useSiteRealtime } from './hooks/useSiteRealtime';
 import { useSiteVisitTracking } from './hooks/useSiteVisitTracking';
 import { getAdminToken } from './lib/admin-rpc';
+import { SeoManager } from './components/SeoManager';
 import { Header, Footer } from './components/layout/Header';
 import { FloatingCart } from './components/layout/FloatingCart';
 import { ScrollToTop } from './components/layout/ScrollToTop';
@@ -74,8 +75,6 @@ function SiteBridges() {
   const { isAdmin, loading } = useAdminAuth();
   const location = useLocation();
   useSiteRealtime();
-  // Skip while auth hydrates and whenever an admin token exists — otherwise the
-  // admin's first paint on / or /menu is counted before isAdmin becomes true.
   useSiteVisitTracking({
     skip:
       loading ||
@@ -83,7 +82,7 @@ function SiteBridges() {
       !!getAdminToken() ||
       location.pathname.startsWith('/admin'),
   });
-  return null;
+  return <SeoManager />;
 }
 
 export default function App() {

@@ -4,19 +4,22 @@ export type VisitorLocation = {
   city: string | null;
 };
 
-const CACHE_KEY = 'ay-food-visitor-location';
+const CACHE_KEY = 'ay-food-visitor-location-v2';
 const EMPTY: VisitorLocation = { country: null, region: null, city: null };
+
+type Cached = VisitorLocation & { resolved: true };
 
 function hasLocation(loc: VisitorLocation): boolean {
   return Boolean(loc.country || loc.region || loc.city);
 }
 
-function readCache(): VisitorLocation | null {
+function readCache(): Cached | null {
   try {
     const cached = sessionStorage.getItem(CACHE_KEY);
     if (!cached) return null;
-    const parsed = JSON.parse(cached) as VisitorLocation;
-    return hasLocation(parsed) ? parsed : null;
+    const parsed = JSON.parse(cached) as Cached;
+    if (parsed?.resolved) return parsed;
+    return null;
   } catch {
     return null;
   }
@@ -24,41 +27,21 @@ function readCache(): VisitorLocation | null {
 
 function writeCache(location: VisitorLocation) {
   try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(location));
+    const payload: Cached = { ...location, resolved: true };
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(payload));
   } catch {
     // ignore
   }
 }
 
-async function fetchJson(url: string, timeoutMs = 4500): Promise<unknown> {
+async function fetchJson(url: string, timeoutMs = 4000): Promise<unknown> {
   const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`location failed (${res.status})`);
   return res.json();
 }
 
-/** Primary + fallbacks — same idea as Travel & Tour geo enrichment, client-side for Vite. */
+/** Primary + fallbacks — cache both hits and misses for the tab session. */
 async function resolveFromApis(): Promise<VisitorLocation> {
-  // 1) ipapi.co
-  try {
-    const data = (await fetchJson('https://ipapi.co/json/')) as {
-      error?: boolean;
-      country_name?: string;
-      region?: string;
-      city?: string;
-    };
-    if (!data.error) {
-      const location: VisitorLocation = {
-        country: data.country_name ?? null,
-        region: data.region ?? null,
-        city: data.city ?? null,
-      };
-      if (hasLocation(location)) return location;
-    }
-  } catch {
-    // try next
-  }
-
-  // 2) ipwho.is
   try {
     const data = (await fetchJson('https://ipwho.is/')) as {
       success?: boolean;
@@ -78,20 +61,17 @@ async function resolveFromApis(): Promise<VisitorLocation> {
     // try next
   }
 
-  // 3) ip-api.com (HTTP JSON; works on many networks)
   try {
-    const data = (await fetchJson(
-      'https://ip-api.com/json/?fields=status,country,regionName,city',
-    )) as {
-      status?: string;
-      country?: string;
-      regionName?: string;
+    const data = (await fetchJson('https://ipapi.co/json/')) as {
+      error?: boolean;
+      country_name?: string;
+      region?: string;
       city?: string;
     };
-    if (data.status === 'success') {
+    if (!data.error) {
       const location: VisitorLocation = {
-        country: data.country ?? null,
-        region: data.regionName ?? null,
+        country: data.country_name ?? null,
+        region: data.region ?? null,
         city: data.city ?? null,
       };
       if (hasLocation(location)) return location;
@@ -105,10 +85,13 @@ async function resolveFromApis(): Promise<VisitorLocation> {
 
 export async function getVisitorLocation(): Promise<VisitorLocation> {
   const cached = readCache();
-  if (cached) return cached;
+  if (cached) {
+    const { resolved: _r, ...loc } = cached;
+    return loc;
+  }
 
   const location = await resolveFromApis();
-  if (hasLocation(location)) writeCache(location);
+  writeCache(location);
   return location;
 }
 
