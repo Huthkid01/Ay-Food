@@ -11,8 +11,8 @@ export default function CartPage() {
   const { showToast } = useToast();
 
   const tax = (subtotal + packFees) * 0.075;
-  const deliveryFee = activePacks.length > 0 ? 1500 : 0;
-  const total = subtotal + packFees + tax + deliveryFee;
+  // Delivery is chosen at checkout — cart shows items + tax only
+  const total = subtotal + packFees + tax;
 
   function handleAddAnotherPack() {
     const newIndex = packs.length;
@@ -80,6 +80,7 @@ export default function CartPage() {
                     <p className="line-clamp-2 font-medium">{item.foodName}</p>
                     <p className="text-white/50">
                       {item.portionName} · {formatCurrency(item.unitPrice)} × {item.quantity}
+                      {item.unitPrice === 0 ? ' (free)' : ''}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -127,10 +128,9 @@ export default function CartPage() {
             <span>Tax (7.5%)</span>
             <span>{formatCurrency(tax)}</span>
           </div>
-          <div className="flex justify-between text-white/60">
-            <span>Delivery Fee</span>
-            <span>{formatCurrency(deliveryFee)}</span>
-          </div>
+          <p className="text-xs text-white/40">
+            Delivery fee (₦1,500) is added at checkout if you choose delivery.
+          </p>
           <div className="flex justify-between border-t border-white/10 pt-3 text-xl font-bold">
             <span>Total</span>
             <span className="text-brand-gold">{formatCurrency(total)}</span>

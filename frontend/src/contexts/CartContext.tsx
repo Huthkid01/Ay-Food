@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { CartItem, CartPack } from '../types';
 import { PACK_FEE, packItemsTotal } from '../types';
 import { generateId } from '../utils/helpers';
@@ -264,21 +264,24 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, { packs: [], currentPackIndex: 0 });
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(CART_KEY);
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem(CART_KEY);
+      if (saved) {
         dispatch({ type: 'LOAD', payload: migrateLegacyCart(JSON.parse(saved)) });
-      } catch {
-        /* ignore */
       }
+    } catch {
+      /* ignore */
     }
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     localStorage.setItem(CART_KEY, JSON.stringify(state));
-  }, [state]);
+  }, [state, hydrated]);
 
   const activePacks = useMemo(
     () => state.packs.filter((p) => p.items.length > 0),

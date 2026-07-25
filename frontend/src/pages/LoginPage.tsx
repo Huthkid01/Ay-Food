@@ -112,7 +112,7 @@ export default function LoginPage() {
 
         {!isRegister && (
           <p className="mt-4 text-center text-xs text-white/40">
-            Demo admin: admin@ayfood.ng / password123
+          Demo admin: contact@ayfoodpalace.com
           </p>
         )}
 

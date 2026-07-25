@@ -1,6 +1,69 @@
-/** Food image URLs — hero uses local A.Y Food Palace photos; menu items use Unsplash */
+/** Food image URLs — hero uses local palace photos; menu uses optimized Unsplash CDN images */
 
-const params = 'auto=format&fit=crop&w=800&h=600&q=80';
+export type UnsplashSize = 'thumb' | 'card' | 'large';
+
+const SIZE_PRESETS: Record<UnsplashSize, { w: number; h: number; q: number }> = {
+  /** Admin list / tiny avatars */
+  thumb: { w: 96, h: 96, q: 60 },
+  /** Menu / home food cards */
+  card: { w: 480, h: 360, q: 72 },
+  /** Rare zoom / larger tiles */
+  large: { w: 720, h: 540, q: 75 },
+};
+
+/** Build a compressed Unsplash CDN URL (WebP when supported via auto=format + fm=webp). */
+export function buildUnsplashUrl(photoId: string, size: UnsplashSize = 'card'): string {
+  const { w, h, q } = SIZE_PRESETS[size];
+  return `https://images.unsplash.com/photo-${photoId}?auto=format&fit=crop&w=${w}&h=${h}&q=${q}&fm=webp`;
+}
+
+/** Tiny blur placeholder for progressive paint (~1–2 KB). */
+export function buildUnsplashBlur(photoId: string): string {
+  return `https://images.unsplash.com/photo-${photoId}?auto=format&fit=crop&w=24&h=18&q=30&blur=40&fm=webp`;
+}
+
+/**
+ * Rewrite any Unsplash URL to a smaller/faster size.
+ * Also upgrades old 800px links saved in localStorage.
+ */
+export function optimizeUnsplashUrl(url: string, size: UnsplashSize = 'card'): string {
+  if (!url.includes('images.unsplash.com')) return url;
+  try {
+    const parsed = new URL(url);
+    const { w, h, q } = SIZE_PRESETS[size];
+    parsed.searchParams.set('auto', 'format');
+    parsed.searchParams.set('fit', 'crop');
+    parsed.searchParams.set('w', String(w));
+    parsed.searchParams.set('h', String(h));
+    parsed.searchParams.set('q', String(q));
+    parsed.searchParams.set('fm', 'webp');
+    parsed.searchParams.delete('ixlib');
+    parsed.searchParams.delete('ixid');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+export function unsplashSrcSet(url: string): string | undefined {
+  if (!url.includes('images.unsplash.com')) return undefined;
+  return [
+    `${optimizeUnsplashUrl(url, 'thumb')} 96w`,
+    `${optimizeUnsplashUrl(url, 'card')} 480w`,
+    `${optimizeUnsplashUrl(url, 'large')} 720w`,
+  ].join(', ');
+}
+
+export function unsplashBlurUrl(url: string): string | undefined {
+  if (!url.includes('images.unsplash.com/photo-')) return undefined;
+  const match = url.match(/photo-([a-zA-Z0-9_-]+)/);
+  if (!match) return undefined;
+  return buildUnsplashBlur(match[1]);
+}
+
+function u(id: string) {
+  return buildUnsplashUrl(id, 'card');
+}
 
 export const HERO_IMAGE = '/assets/hero.png';
 export const HERO_INTERIOR_1 = '/assets/hero-interior-1.png';
@@ -14,7 +77,6 @@ export interface HeroSlide {
   description: string;
   primaryCta: { label: string; to: string };
   secondaryCta: { label: string; to: string };
-  /** Fine-tune crop for wide hero banners */
   imagePosition?: string;
 }
 
@@ -52,88 +114,107 @@ export const HERO_SLIDES: HeroSlide[] = [
   },
 ];
 
-export const DEFAULT_FOOD_IMAGE =
-  `https://images.unsplash.com/photo-1546069901-ba9599a7e63c?${params}`;
+/** Verified Unsplash photos (HTTP 200) — Nigerian / matching food imagery */
+export const DEFAULT_FOOD_IMAGE = u('1664992960082-0ea299a9c53e');
 
 const CATEGORY_IMAGES: Record<string, string> = {
-  rice: `https://images.unsplash.com/photo-1586201375770-54d07c1a5619?${params}`,
-  swallow: `https://images.unsplash.com/photo-1604329760661-e71dc83f8b26?${params}`,
-  soup: `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  proteins: `https://images.unsplash.com/photo-1604908177456-04039589c13e?${params}`,
-  drinks: `https://images.unsplash.com/photo-1544145945-f904253840c7?${params}`,
-  snacks: `https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?${params}`,
-  desserts: `https://images.unsplash.com/photo-1551024506-0bccd281d577?${params}`,
-  extras: `https://images.unsplash.com/photo-1512621776951-a57141f2eefd?${params}`,
-  breakfast: `https://images.unsplash.com/photo-1525351484163-7529414344d8?${params}`,
+  swallow: u('1604329760661-e71dc83f8f26'),
+  meals: u('1664992960082-0ea299a9c53e'),
+  protein: u('1555939594-58d7cb561ad1'),
+  sides: u('1603048297172-c92544798d5a'),
+  soups: u('1763048443535-1243379234e2'),
+  // legacy slugs (older admin data)
+  rice: u('1664992960082-0ea299a9c53e'),
+  soup: u('1763048443535-1243379234e2'),
+  proteins: u('1555939594-58d7cb561ad1'),
+  drinks: u('1602856124289-0331a6eff6fe'),
+  snacks: u('1530469912745-a215c6b256ea'),
+  desserts: u('1563805042-7684c019e1cb'),
+  extras: u('1603048297172-c92544798d5a'),
+  breakfast: u('1525351484163-7529414344d8'),
 };
 
+/**
+ * One curated working Unsplash image per menu slug.
+ * Prefer real Nigerian dish photos where available (jollof, egusi, okra, moi moi, etc.).
+ */
 const FOOD_IMAGES: Record<string, string> = {
-  'jollof-rice': `https://images.unsplash.com/photo-1516684669134-de6f7c4734bf?${params}`,
-  'fried-rice': `https://images.unsplash.com/photo-160313387287-876f04eb551b?${params}`,
-  'ofada-rice': `https://images.unsplash.com/photo-1586201375770-54d07c1a5619?${params}`,
-  'coconut-rice': `https://images.unsplash.com/photo-1534422298390-5784a804b764?${params}`,
-  'grilled-chicken': `https://images.unsplash.com/photo-1598103442097-256743ae4226?${params}`,
-  'fried-chicken-1': `https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?${params}`,
-  'fried-chicken-2': `https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?${params}`,
-  'fried-chicken-3': `https://images.unsplash.com/photo-1562967916-eb82221dfb92?${params}`,
-  'beef-suya': `https://images.unsplash.com/photo-1529193591184-b1d58069-72b?${params}`,
-  'grilled-fish': `https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?${params}`,
-  'shawarma': `https://images.unsplash.com/photo-1529003605782-b1131658182f?${params}`,
-  'burger': `https://images.unsplash.com/photo-1568901346835-4c7d7a4c4f8d?${params}`,
-  'pizza-margherita': `https://images.unsplash.com/photo-1574071318508-1cdbab80d002?${params}`,
-  'pasta-alfredo': `https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?${params}`,
-  'fried-plantain': `https://images.unsplash.com/photo-1603048297172-c92544798d5a?${params}`,
-  'garden-salad': `https://images.unsplash.com/photo-1512621776951-a57141f2eefd?${params}`,
-  'coleslaw': `https://images.unsplash.com/photo-1623428187425-52470f9a2c7a?${params}`,
-  'chapman': `https://images.unsplash.com/photo-1544145945-f904253840c7?${params}`,
-  'orange-juice': `https://images.unsplash.com/photo-1621506289937-a682ef3a576f?${params}`,
-  'smoothie-bowl': `https://images.unsplash.com/photo-1590301157890-4810ed352733?${params}`,
-  'fruit-salad': `https://images.unsplash.com/photo-1564093497595-59396f913dc9?${params}`,
-  'ice-cream': `https://images.unsplash.com/photo-1563805042-7684c019e1cb?${params}`,
-  'puff-puff': `https://images.unsplash.com/photo-1486427944299-d1955d23a34f?${params}`,
-  'meat-pie': `https://images.unsplash.com/photo-1607925997314-09827c4a6b30?${params}`,
-  'egusi-soup': `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  'pepper-soup': `https://images.unsplash.com/photo-1604908177522-402147483e8e?${params}`,
-  'moi-moi': `https://images.unsplash.com/photo-1585032226651-759b368d7246?${params}`,
-  'beans-porridge': `https://images.unsplash.com/photo-1543339498-b600cd4b5685?${params}`,
-  'yam-egg-sauce': `https://images.unsplash.com/photo-1596797038530-2c107229654b?${params}`,
-  'bread-egg': `https://images.unsplash.com/photo-1525351484163-7529414344d8?${params}`,
-  'white-rice': `https://images.unsplash.com/photo-1586201375770-54d07c1a5619?${params}`,
-  'native-jollof': `https://images.unsplash.com/photo-1516684669134-de6f7c4734bf?${params}`,
-  'eba': `https://images.unsplash.com/photo-1604329760661-e71dc83f8b26?${params}`,
-  'semovita': `https://images.unsplash.com/photo-1604329760661-e71dc83f8b26?${params}`,
-  'fufu': `https://images.unsplash.com/photo-1604329760661-e71dc83f8b26?${params}`,
-  'wheat-swallow': `https://images.unsplash.com/photo-1604329760661-e71dc83f8b26?${params}`,
-  'starch': `https://images.unsplash.com/photo-1604329760661-e71dc83f8b26?${params}`,
-  'amala': `https://images.unsplash.com/photo-1604329760661-e71dc83f8b26?${params}`,
-  'efo-riro': `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  'okra-soup': `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  'ogbono-soup': `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  'bitterleaf-soup': `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  'banga-soup': `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  'oha-soup': `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  'edikaikong': `https://images.unsplash.com/photo-1547592166-23ac45744acd?${params}`,
-  'goat-meat': `https://images.unsplash.com/photo-1529193591184-b1d58069-72b?${params}`,
-  'turkey-wings': `https://images.unsplash.com/photo-1598103442097-256743ae4226?${params}`,
-  'nkwobi': `https://images.unsplash.com/photo-1529193591184-b1d58069-72b?${params}`,
-  'akara': `https://images.unsplash.com/photo-1585032226651-759b368d7246?${params}`,
-  'pap-akara': `https://images.unsplash.com/photo-1525351484163-7529414344d8?${params}`,
-  'boli-groundnut': `https://images.unsplash.com/photo-1603048297172-c92544798d5a?${params}`,
-  'zobo': `https://images.unsplash.com/photo-1544145945-f904253840c7?${params}`,
-  'malt-drink': `https://images.unsplash.com/photo-1544145945-f904253840c7?${params}`,
-  'soft-drink': `https://images.unsplash.com/photo-1622483767028-3f66f32aef97?${params}`,
-  'bottled-water': `https://images.unsplash.com/photo-1548839140-29a749299164?${params}`,
+  // Swallow
+  amala: u('1604329760661-e71dc83f8f26'),
+  eba: u('1614725363900-538db555d7b4'),
+  semo: u('1604329760661-e71dc83f8f26'),
+  'pounded-yam': u('1614725363900-538db555d7b4'),
+  // Meals
+  'jollof-rice': u('1664992960082-0ea299a9c53e'),
+  'fried-rice': u('1603496987674-79600a000f55'),
+  'ofada-rice': u('1664993101841-036f189719b6'),
+  beans: u('1664334997177-6ae654a62735'),
+  spaghetti: u('1551183053-bf91a1d81141'),
+  'porridge-yam': u('1596797038530-2c107229654b'),
+  yam: u('1596797038530-2c107229654b'),
+  'special-rice': u('1666190092689-e3968aa0c32c'),
+  // Protein
+  'goat-meat': u('1604908176997-125f25cc6f3d'),
+  beef: u('1555939594-58d7cb561ad1'),
+  ponmo: u('1476224203421-9ac39bcb3327'),
+  egg: u('1482049016688-2d3e1b311543'),
+  turkey: u('1626645738196-c2a7c87a8f58'),
+  chicken: u('1532550907401-a500c9a57435'),
+  'wings-laps': u('1586793783658-261cddf883ef'),
+  'hake-fish': u('1665401015549-712c0dc5ef85'),
+  'titus-fish': u('1665401015549-712c0dc5ef85'),
+  'fresh-fish': u('1665332195309-9d75071138f0'),
+  'cat-fish': u('1665401015549-712c0dc5ef85'),
+  gizzard: u('1476224203421-9ac39bcb3327'),
+  'panla-kika': u('1665332195309-9d75071138f0'),
+  brokoto: u('1476224203421-9ac39bcb3327'),
+  snail: u('1604908176997-125f25cc6f3d'),
+  // Sides
+  plantain: u('1603048297172-c92544798d5a'),
+  'moi-moi': u('1661588669110-81142a5b9e57'),
+  salad: u('1512621776951-a57141f2eefd'),
+  // Soups
+  ewedu: u('1604329760661-e71dc83f8f26'),
+  gbegiri: u('1708782344137-21c48d98dfcc'),
+  egusi: u('1763048443535-1243379234e2'),
+  okro: u('1665332561290-cc6757172890'),
+  'efo-riro': u('1604329760661-e71dc83f8f26'),
 };
 
-export function getFoodImageUrl(slug: string, category: string): string {
-  return FOOD_IMAGES[slug] ?? CATEGORY_IMAGES[category] ?? DEFAULT_FOOD_IMAGE;
+export function getFoodImageUrl(
+  slug: string,
+  category: string,
+  size: UnsplashSize = 'card'
+): string {
+  const base = FOOD_IMAGES[slug] ?? CATEGORY_IMAGES[category] ?? DEFAULT_FOOD_IMAGE;
+  return optimizeUnsplashUrl(base, size);
 }
 
-export function resolveFoodImage(food: {
-  image?: string | null;
-  slug: string;
-  category?: { slug: string };
-}): string {
-  if (food.image?.startsWith('http')) return food.image;
-  return getFoodImageUrl(food.slug, food.category?.slug ?? 'extras');
+export function resolveFoodImage(
+  food: {
+    image?: string | null;
+    slug: string;
+    category?: { slug: string };
+  },
+  size: UnsplashSize = 'card'
+): string {
+  const image = food.image?.trim();
+  if (
+    image &&
+    (image.startsWith('http') ||
+      image.startsWith('data:') ||
+      image.startsWith('blob:') ||
+      image.startsWith('/'))
+  ) {
+    return optimizeUnsplashUrl(image, size);
+  }
+  return getFoodImageUrl(food.slug, food.category?.slug ?? 'extras', size);
+}
+
+/** All curated menu image URLs (for preload / admin import). */
+export function getAllMenuImageEntries(): Array<{ slug: string; url: string }> {
+  return Object.entries(FOOD_IMAGES).map(([slug, url]) => ({
+    slug,
+    url: optimizeUnsplashUrl(url, 'card'),
+  }));
 }

@@ -14,16 +14,86 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 
   body {
     @apply bg-brand-dark text-white antialiased;
+    /* Faster taps on mobile */
+    touch-action: manipulation;
+  }
+
+  /*
+   * iOS Safari zooms focused inputs under 16px.
+   * Keep all form fields at 16px so typing never triggers viewport zoom.
+   */
+  input,
+  textarea,
+  select,
+  button {
+    font-size: 16px;
+  }
+
+  input[type='text'],
+  input[type='email'],
+  input[type='tel'],
+  input[type='number'],
+  input[type='password'],
+  input[type='search'],
+  input[type='url'],
+  input:not([type]),
+  textarea,
+  select {
+    font-size: 16px !important;
+    line-height: 1.4;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Skip painting work for off-screen blocks where supported */
+  .content-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 480px;
   }
 }
 
 @layer utilities {
   .text-gradient {
     @apply bg-gradient-to-r from-brand-gold to-brand-green bg-clip-text text-transparent;
+  }
+
+  /* Marquee for the gold notification banner */
+  @keyframes scroll-banner {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-scroll-banner {
+    display: inline-block;
+    animation: scroll-banner 28s linear infinite;
+    will-change: transform;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-scroll-banner {
+      animation: none;
+      transform: none;
+    }
   }
 
   /* 2-column product grid on mobile, 3 on desktop */
@@ -39,4 +109,50 @@
       gap: 1.5rem;
     }
   }
+}
+
+/* Admin light mode — remap storefront dark utilities used inside admin pages */
+.admin-shell[data-admin-theme='light'] .bg-brand-dark {
+  background-color: #f5f7fb;
+}
+.admin-shell[data-admin-theme='light'] .bg-brand-dark-light {
+  background-color: #ffffff;
+}
+.admin-shell[data-admin-theme='light'] .border-white\/5 {
+  border-color: rgb(226 232 240 / 0.9);
+}
+.admin-shell[data-admin-theme='light'] .border-white\/10 {
+  border-color: rgb(226 232 240);
+}
+.admin-shell[data-admin-theme='light'] .border-white\/15,
+.admin-shell[data-admin-theme='light'] .border-white\/20 {
+  border-color: rgb(203 213 225);
+}
+.admin-shell[data-admin-theme='light'] .text-white {
+  color: #0f172a;
+}
+.admin-shell[data-admin-theme='light'] .text-white\/35,
+.admin-shell[data-admin-theme='light'] .text-white\/40 {
+  color: #94a3b8;
+}
+.admin-shell[data-admin-theme='light'] .text-white\/50,
+.admin-shell[data-admin-theme='light'] .text-white\/55 {
+  color: #64748b;
+}
+.admin-shell[data-admin-theme='light'] .text-white\/60,
+.admin-shell[data-admin-theme='light'] .text-white\/65 {
+  color: #475569;
+}
+.admin-shell[data-admin-theme='light'] .text-white\/70,
+.admin-shell[data-admin-theme='light'] .text-white\/80,
+.admin-shell[data-admin-theme='light'] .text-white\/85 {
+  color: #334155;
+}
+.admin-shell[data-admin-theme='light'] .hover\:bg-white\/5:hover,
+.admin-shell[data-admin-theme='light'] .hover\:bg-white\/10:hover {
+  background-color: rgb(241 245 249);
+}
+.admin-shell[data-admin-theme='light'] .bg-black\/60,
+.admin-shell[data-admin-theme='light'] .bg-black\/70 {
+  background-color: rgb(15 23 42 / 0.45);
 }

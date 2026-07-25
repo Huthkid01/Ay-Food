@@ -7,10 +7,14 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
-    "build": "npm run build:backend && npm run build:frontend",
+    "build": "npm run build:frontend",
     "build:frontend": "cd frontend && npm run build",
     "build:backend": "cd backend && npm run build",
-    "db:setup": "cd backend && npm run db:setup"
+    "db:setup": "cd backend && npm run db:setup",
+    "supabase:login": "npx supabase login",
+    "supabase:link": "npx supabase link",
+    "supabase:push": "npx supabase db push",
+    "supabase:functions": "npx supabase functions deploy"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -2,14 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Plus, Minus } from 'lucide-react';
-import { menuApi } from '../services/api';
+import { fetchMenuCatalog, MENU_CATALOG_KEY } from '../services/menu-catalog';
 import { useCart } from '../contexts/CartContext';
 import { useToast } from '../components/ui/Toast';
 import { formatCurrency, cn } from '../utils/helpers';
-import { resolveFoodImage } from '../utils/food-images';
-import { FoodImage } from '../components/ui/FoodImage';
-import { NIGERIAN_MENU_FOODS, MENU_CATEGORIES, filterMenuFoods } from '../data/nigerian-menu';
+import { filterMenuFoods } from '../data/nigerian-menu';
+import { FoodMenuCard } from '../components/ui/FoodMenuCard';
 import { useFoodPackQuantity } from '../hooks/useFoodPackQuantity';
+import { useSiteContentData } from '../hooks/useSiteContent';
 import { PACK_FEE, packItemsTotal } from '../types';
 import type { Food } from '../types';
 
@@ -33,6 +33,7 @@ export default function BuildPackPage() {
     packs.length === 0 ? 'Pack 1' : packs[currentPackIndex]?.name ?? `Pack ${currentPackIndex + 1}`;
   const { getQuantity, changeQuantity } = useFoodPackQuantity(targetPackIndex, activePackName);
   const { showToast } = useToast();
+  const { buildPage } = useSiteContentData();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -47,32 +48,19 @@ export default function BuildPackPage() {
     }
   }, [searchParams, selectPack]);
 
-  const { data: categoriesData } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => menuApi.getCategories().then((r) => r.data),
-    retry: 1,
+  const { data: catalog, isLoading } = useQuery({
+    queryKey: MENU_CATALOG_KEY,
+    queryFn: fetchMenuCatalog,
+    staleTime: 30_000,
   });
 
-  const { data: foodsData, isLoading } = useQuery({
-    queryKey: ['build-all-foods'],
-    queryFn: () => menuApi.getFoods({ sort: 'popular', limit: 100 }).then((r) => r.data),
-    retry: 1,
-  });
-
-  const usingFallback = !foodsData?.foods?.length;
-  const categories =
-    categoriesData?.categories?.length ? categoriesData.categories : MENU_CATEGORIES;
-
-  const allFoods: Food[] = usingFallback ? NIGERIAN_MENU_FOODS : foodsData!.foods;
+  const categories = catalog?.categories ?? [];
+  const allFoods = catalog?.foods;
 
   const foods = useMemo(
-    () => filterMenuFoods(allFoods, category, debouncedSearch),
+    () => filterMenuFoods(allFoods ?? [], category, debouncedSearch),
     [allFoods, category, debouncedSearch]
   );
-
-  function handleAddToPack(food: Food) {
-    changeQuantity(food, 1);
-  }
 
   function notifyPackQtyChange(
     foodName: string,
@@ -90,11 +78,9 @@ export default function BuildPackPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="mb-2 font-display text-4xl font-bold">
-        Build Your Custom <span className="text-gradient">Packs</span>
+        {buildPage.title} <span className="text-gradient">{buildPage.titleHighlight}</span>
       </h1>
-      <p className="mb-8 text-white/60">
-        Add items to Pack 1, then create Pack 2 for someone else — just like building separate meal orders.
-      </p>
+      <p className="mb-8 text-white/60">{buildPage.subtitle}</p>
 
       {/* Packs overview */}
       <div className="mb-8">
@@ -317,7 +303,7 @@ export default function BuildPackPage() {
           ))}
         </div>
 
-        {isLoading && !usingFallback ? (
+        {isLoading ? (
           <div className="food-grid">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-64 animate-pulse rounded-2xl bg-brand-dark-light" />
@@ -340,49 +326,15 @@ export default function BuildPackPage() {
           </div>
         ) : (
           <div className="food-grid">
-            {foods.map((food) => {
-              const price = food.portions[0]?.price ?? 0;
-              const qty = getQuantity(food);
-              return (
-                <div
-                  key={food.id}
-                  className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-brand-dark-light"
-                >
-                  <div className="aspect-video overflow-hidden">
-                    <FoodImage src={resolveFoodImage(food)} alt={food.name} className="h-full w-full object-cover" />
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-semibold">{food.name}</h3>
-                    <p className="mb-3 font-bold text-brand-gold">{formatCurrency(price)}</p>
-                    <div className="mb-3 flex items-center justify-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => changeQuantity(food, -1)}
-                        disabled={qty === 0}
-                        className="rounded-full p-1.5 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        <Minus size={16} />
-                      </button>
-                      <span className="w-6 text-center font-medium">{qty}</span>
-                      <button
-                        type="button"
-                        onClick={() => changeQuantity(food, 1)}
-                        className="rounded-full p-1.5 hover:bg-white/10"
-                      >
-                        <Plus size={16} />
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAddToPack(food)}
-                      className="w-full rounded-full bg-brand-gold py-2.5 text-sm font-semibold text-white hover:bg-brand-gold-dark"
-                    >
-                      {qty > 0 ? 'Add Another' : 'Add to Pack'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {foods.map((food: Food) => (
+              <FoodMenuCard
+                key={food.id}
+                food={food}
+                getQuantity={(portionId) => getQuantity(food, portionId)}
+                onChangeQuantity={(delta, portionId) => changeQuantity(food, delta, portionId)}
+                onAdd={(portionId) => changeQuantity(food, 1, portionId)}
+              />
+            ))}
           </div>
         )}
       </div>

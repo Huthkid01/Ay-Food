@@ -1,94 +1,238 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { useCart } from '../contexts/CartContext';
-import { orderApi, paymentApi, couponApi } from '../services/api';
+import { useSiteContentData } from '../hooks/useSiteContent';
+import { createOrderInDatabase } from '../services/orders.service';
 import { formatCurrency } from '../utils/helpers';
+import { openOrderOnWhatsApp, type WhatsAppOrderDetails } from '../utils/whatsapp-order';
+import { PaymentTransferModal } from '../components/checkout/PaymentTransferModal';
+import { notifyAdminPaymentConfirmed } from '../services/payment-notify.service';
+import { useToast } from '../components/ui/Toast';
 
-const checkoutSchema = z.object({
-  customerName: z.string().min(2, 'Name is required'),
-  customerPhone: z.string().min(10, 'Valid phone required'),
-  customerEmail: z.string().email('Valid email required'),
-  orderType: z.enum(['DELIVERY', 'PICKUP']),
-  deliveryAddress: z.string().optional(),
-  deliveryInstructions: z.string().optional(),
-  couponCode: z.string().optional(),
-  paymentProvider: z.enum(['PAYSTACK', 'FLUTTERWAVE', 'STRIPE']),
-});
+const checkoutSchema = z
+  .object({
+    customerName: z.string().min(2, 'Name is required'),
+    customerPhone: z.string().min(10, 'Valid phone required'),
+    customerEmail: z.string().email('Valid email required'),
+    orderType: z.enum(['DELIVERY', 'PICKUP']),
+    deliveryAddress: z.string().optional(),
+    deliveryInstructions: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.orderType === 'DELIVERY' && !data.deliveryAddress?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Delivery address is required',
+        path: ['deliveryAddress'],
+      });
+    }
+  });
 
 type CheckoutForm = z.infer<typeof checkoutSchema>;
 
+type CartSnapshotItem = {
+  id: string;
+  foodId: string;
+  foodPortionId: string;
+  foodName: string;
+  portionName: string;
+  quantity: number;
+  unitPrice: number;
+  notes?: string;
+  packName?: string;
+  image?: string;
+};
+
+/** Draft payment — order is NOT in admin until “I have made payment”. */
+type PaymentDraft = {
+  orderNumber: string;
+  form: CheckoutForm;
+  total: number;
+  subtotal: number;
+  packFees: number;
+  tax: number;
+  deliveryFee: number;
+  items: CartSnapshotItem[];
+};
+
+type CompletedOrder = {
+  orderNumber: string;
+  total: number;
+  whatsapp: WhatsAppOrderDetails;
+};
+
+function nextOrderNumber() {
+  return `AY-${Date.now().toString().slice(-8)}`;
+}
+
 export default function CheckoutPage() {
   const { getFlattenedItems, subtotal, packFees, activePacks, clearCart } = useCart();
+  const { restaurant } = useSiteContentData();
+  const { showToast } = useToast();
   const items = getFlattenedItems();
-  const navigate = useNavigate();
-  const [discount, setDiscount] = useState(0);
-  const [couponError, setCouponError] = useState('');
+  const [draft, setDraft] = useState<PaymentDraft | null>(null);
+  const [completed, setCompleted] = useState<CompletedOrder | null>(null);
 
   const taxable = subtotal + packFees;
   const tax = taxable * 0.075;
-  const deliveryFee = activePacks.length > 0 ? 1500 : 0;
-  const total = taxable + tax + deliveryFee - discount;
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<CheckoutForm>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       orderType: 'DELIVERY',
-      paymentProvider: 'FLUTTERWAVE',
     },
   });
 
   const orderType = watch('orderType');
+  const deliveryFee = orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
+  const total = taxable + tax + deliveryFee;
+  /** Open payment modal only — do not create the order yet. */
+  function openPaymentDraft(form: CheckoutForm) {
+    const snapshotItems: CartSnapshotItem[] = items.map((i) => ({
+      id: i.id,
+      foodId: i.foodId,
+      foodPortionId: i.foodPortionId,
+      foodName: i.foodName,
+      portionName: i.portionName,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      notes: i.notes,
+      packName: i.packName,
+      image: i.image,
+    }));
 
-  const createOrder = useMutation({
-    mutationFn: async (data: CheckoutForm) => {
-      const orderRes = await orderApi.create({
-        items: items.map((i) => ({
+    const draftDelivery =
+      form.orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
+    const draftTax = (subtotal + packFees) * 0.075;
+    const draftTotal = subtotal + packFees + draftTax + draftDelivery;
+
+    setDraft({
+      orderNumber: nextOrderNumber(),
+      form,
+      total: draftTotal,
+      subtotal: subtotal + packFees,
+      packFees,
+      tax: draftTax,
+      deliveryFee: draftDelivery,
+      items: snapshotItems,
+    });
+  }
+
+  const confirmPaid = useMutation({
+    mutationFn: async (payment: PaymentDraft) => {
+      const { form, items: snapItems } = payment;
+
+      const order = await createOrderInDatabase({
+        orderNumber: payment.orderNumber,
+        orderType: form.orderType,
+        customerName: form.customerName,
+        customerPhone: form.customerPhone,
+        customerEmail: form.customerEmail,
+        deliveryAddress: form.orderType === 'DELIVERY' ? form.deliveryAddress : undefined,
+        deliveryInstructions: form.deliveryInstructions,
+        subtotal: payment.subtotal,
+        tax: payment.tax,
+        deliveryFee: payment.deliveryFee,
+        discount: 0,
+        total: payment.total,
+        items: snapItems.map((i) => ({
           foodId: i.foodId,
-          foodPortionId: i.foodPortionId,
+          foodName: i.foodName,
           portionName: i.portionName,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           notes: i.notes,
           packName: i.packName,
         })),
-        packFees,
-        ...data,
-        deliveryAddress: data.orderType === 'DELIVERY' ? data.deliveryAddress : undefined,
       });
-      const order = orderRes.data.order;
-      const paymentRes = await paymentApi.initialize({
-        orderId: order.id,
-        provider: data.paymentProvider,
-      });
-      return { order, payment: paymentRes.data };
+
+      return {
+        orderNumber: order.orderNumber,
+        total: order.total,
+        form,
+        snapItems,
+      };
     },
-    onSuccess: ({ order, payment }) => {
+    onSuccess: ({ orderNumber, total: orderTotal, form, snapItems }) => {
+      const whatsapp: WhatsAppOrderDetails = {
+        orderNumber,
+        customerName: form.customerName,
+        customerPhone: form.customerPhone,
+        customerEmail: form.customerEmail,
+        orderType: form.orderType,
+        deliveryAddress: form.orderType === 'DELIVERY' ? form.deliveryAddress : undefined,
+        deliveryInstructions: form.deliveryInstructions,
+        items: snapItems.map((i) => ({
+          foodName: i.foodName,
+          portionName: i.portionName,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          packName: i.packName,
+          notes: i.notes,
+        })),
+        total: orderTotal,
+        paid: true,
+      };
+
       clearCart();
-      if (payment.authorizationUrl) {
-        window.open(payment.authorizationUrl, '_blank');
-      }
-      navigate(`/track?order=${order.orderNumber}`);
+      setDraft(null);
+      setCompleted({ orderNumber, total: orderTotal, whatsapp });
+      void notifyAdminPaymentConfirmed(whatsapp);
+    },
+    onError: (err) => {
+      showToast(
+        err instanceof Error
+          ? err.message
+          : 'Could not save order to database. Please try again.',
+        'error',
+      );
     },
   });
 
-  async function applyCoupon() {
-    const code = watch('couponCode');
-    if (!code) return;
-    try {
-      const res = await couponApi.validate(code, subtotal + packFees);
-      setDiscount(res.data.discount);
-      setCouponError('');
-    } catch {
-      setCouponError('Invalid or expired coupon');
-      setDiscount(0);
-    }
+  function handleCancelPayment() {
+    setDraft(null);
   }
 
-  if (items.length === 0) {
+  async function handleConfirmPaid() {
+    if (!draft) return;
+    await confirmPaid.mutateAsync(draft);
+  }
+
+  function handleContinueWhatsApp() {
+    if (!completed) return;
+    openOrderOnWhatsApp(restaurant.whatsapp, completed.whatsapp);
+  }
+
+  if (completed) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+        <h1 className="mb-2 font-display text-3xl font-bold">
+          <span className="text-gradient">Order placed</span>
+        </h1>
+        <p className="mb-6 text-white/60">
+          Tracking number {completed.orderNumber} · {formatCurrency(completed.total)}
+        </p>
+        <PaymentTransferModal
+          open
+          confirmed
+          amount={completed.total}
+          orderNumber={completed.orderNumber}
+          bank={{
+            bankName: restaurant.bankName,
+            accountName: restaurant.accountName,
+            accountNumber: restaurant.accountNumber,
+          }}
+          onConfirmPaid={() => undefined}
+          onContinueWhatsApp={handleContinueWhatsApp}
+        />
+      </div>
+    );
+  }
+
+  if (items.length === 0 && !draft) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <p className="text-white/60">Your cart is empty</p>
@@ -102,22 +246,50 @@ export default function CheckoutPage() {
         <span className="text-gradient">Checkout</span>
       </h1>
 
-      <form onSubmit={handleSubmit((d) => createOrder.mutate(d))} className="grid gap-8 lg:grid-cols-2">
+      <form
+        onSubmit={handleSubmit((d) => openPaymentDraft(d))}
+        className="grid gap-8 lg:grid-cols-2"
+      >
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm text-white/60">Full Name</label>
-            <input {...register('customerName')} className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold" />
-            {errors.customerName && <p className="mt-1 text-xs text-red-400">{errors.customerName.message}</p>}
+            <label htmlFor="checkout-name" className="mb-1 block text-sm text-white/60">
+              Full Name
+            </label>
+            <input
+              id="checkout-name"
+              {...register('customerName')}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+            />
+            {errors.customerName && (
+              <p className="mt-1 text-xs text-red-400">{errors.customerName.message}</p>
+            )}
           </div>
           <div>
-            <label className="mb-1 block text-sm text-white/60">Phone</label>
-            <input {...register('customerPhone')} className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold" />
-            {errors.customerPhone && <p className="mt-1 text-xs text-red-400">{errors.customerPhone.message}</p>}
+            <label htmlFor="checkout-phone" className="mb-1 block text-sm text-white/60">
+              Phone
+            </label>
+            <input
+              id="checkout-phone"
+              {...register('customerPhone')}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+            />
+            {errors.customerPhone && (
+              <p className="mt-1 text-xs text-red-400">{errors.customerPhone.message}</p>
+            )}
           </div>
           <div>
-            <label className="mb-1 block text-sm text-white/60">Email</label>
-            <input {...register('customerEmail')} type="email" className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold" />
-            {errors.customerEmail && <p className="mt-1 text-xs text-red-400">{errors.customerEmail.message}</p>}
+            <label htmlFor="checkout-email" className="mb-1 block text-sm text-white/60">
+              Email
+            </label>
+            <input
+              id="checkout-email"
+              {...register('customerEmail')}
+              type="email"
+              className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+            />
+            {errors.customerEmail && (
+              <p className="mt-1 text-xs text-red-400">{errors.customerEmail.message}</p>
+            )}
           </div>
 
           <div>
@@ -135,34 +307,35 @@ export default function CheckoutPage() {
           {orderType === 'DELIVERY' && (
             <>
               <div>
-                <label className="mb-1 block text-sm text-white/60">Delivery Address</label>
-                <textarea {...register('deliveryAddress')} rows={2} className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold" />
+                <label htmlFor="checkout-address" className="mb-1 block text-sm text-white/60">
+                  Delivery Address
+                </label>
+                <textarea
+                  id="checkout-address"
+                  {...register('deliveryAddress')}
+                  rows={2}
+                  className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+                />
+                {errors.deliveryAddress && (
+                  <p className="mt-1 text-xs text-red-400">{errors.deliveryAddress.message}</p>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm text-white/60">Delivery Instructions</label>
-                <input {...register('deliveryInstructions')} className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold" />
+                <input
+                  {...register('deliveryInstructions')}
+                  className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+                />
               </div>
             </>
           )}
 
-          <div>
-            <label className="mb-1 block text-sm text-white/60">Payment Method</label>
-            <select {...register('paymentProvider')} className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none">
-              <option value="PAYSTACK">Paystack</option>
-              <option value="FLUTTERWAVE">Flutterwave</option>
-              <option value="STRIPE">Stripe</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm text-white/60">Coupon Code</label>
-            <div className="flex gap-2">
-              <input {...register('couponCode')} className="flex-1 rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold" />
-              <button type="button" onClick={applyCoupon} className="rounded-xl bg-brand-gold/20 px-4 text-brand-gold hover:bg-brand-gold/30">
-                Apply
-              </button>
-            </div>
-            {couponError && <p className="mt-1 text-xs text-red-400">{couponError}</p>}
+          <div className="rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-4 py-3 text-sm text-white/80">
+            <p className="font-medium text-brand-gold">Payment: Bank transfer</p>
+            <p className="mt-1 text-white/60">
+              We’ll show the account details next. Your order is only sent to the kitchen after you
+              tap “I have made payment”. You can close the payment screen to add more items first.
+            </p>
           </div>
         </div>
 
@@ -174,8 +347,11 @@ export default function CheckoutPage() {
                 <p className="mb-1 font-medium text-brand-gold">{pack.name}</p>
                 <ul className="space-y-1 pl-2 text-white/80">
                   {pack.items.map((item) => (
-                    <li key={item.id} className="flex justify-between">
-                      <span>{item.foodName} ({item.portionName}) ×{item.quantity}</span>
+                    <li key={item.id} className="flex justify-between gap-2">
+                      <span>
+                        {item.foodName} ({item.portionName}) ×{item.quantity}
+                        {item.unitPrice === 0 ? ' · free' : ''}
+                      </span>
                       <span>{formatCurrency(item.unitPrice * item.quantity)}</span>
                     </li>
                   ))}
@@ -184,18 +360,24 @@ export default function CheckoutPage() {
             ))}
           </ul>
           <div className="space-y-2 border-t border-white/10 pt-4 text-sm">
-            <div className="flex justify-between"><span>Items subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+            <div className="flex justify-between">
+              <span>Items subtotal</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
             {packFees > 0 && (
               <div className="flex justify-between text-white/60">
                 <span>Pack fees ({activePacks.length})</span>
                 <span>{formatCurrency(packFees)}</span>
               </div>
             )}
-            <div className="flex justify-between text-white/60"><span>Tax</span><span>{formatCurrency(tax)}</span></div>
-            <div className="flex justify-between text-white/60"><span>Delivery</span><span>{formatCurrency(deliveryFee)}</span></div>
-            {discount > 0 && (
-              <div className="flex justify-between text-green-400"><span>Discount</span><span>-{formatCurrency(discount)}</span></div>
-            )}
+            <div className="flex justify-between text-white/60">
+              <span>Tax</span>
+              <span>{formatCurrency(tax)}</span>
+            </div>
+            <div className="flex justify-between text-white/60">
+              <span>{orderType === 'DELIVERY' ? 'Delivery' : 'Delivery (pickup — free)'}</span>
+              <span>{formatCurrency(deliveryFee)}</span>
+            </div>
             <div className="flex justify-between border-t border-white/10 pt-2 text-lg font-bold">
               <span>Total</span>
               <span className="text-brand-gold">{formatCurrency(total)}</span>
@@ -203,13 +385,28 @@ export default function CheckoutPage() {
           </div>
           <button
             type="submit"
-            disabled={createOrder.isPending}
             className="mt-6 w-full rounded-full bg-brand-gold py-3 font-semibold text-white disabled:opacity-50"
           >
-            {createOrder.isPending ? 'Processing...' : 'Place Order & Pay'}
+            Continue to payment
           </button>
         </div>
       </form>
+
+      {draft && !completed && (
+        <PaymentTransferModal
+          open
+          amount={draft.total}
+          orderNumber={draft.orderNumber}
+          bank={{
+            bankName: restaurant.bankName,
+            accountName: restaurant.accountName,
+            accountNumber: restaurant.accountNumber,
+          }}
+          onConfirmPaid={handleConfirmPaid}
+          onContinueWhatsApp={handleContinueWhatsApp}
+          onClose={handleCancelPayment}
+        />
+      )}
     </div>
   );
 }

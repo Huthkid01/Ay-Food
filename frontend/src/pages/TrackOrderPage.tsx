@@ -2,33 +2,68 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Check, Clock, ChefHat, Package, Truck, Home } from 'lucide-react';
-import { orderApi } from '../services/api';
+import { Check, Clock, Package, Truck, Home } from 'lucide-react';
+import { getOrderByNumber } from '../services/orders.service';
 import { formatCurrency } from '../utils/helpers';
 
 const STATUS_STEPS = [
   { key: 'RECEIVED', label: 'Order Received', icon: Check },
   { key: 'PREPARING', label: 'Preparing', icon: Clock },
-  { key: 'COOKING', label: 'Cooking', icon: ChefHat },
   { key: 'PACKING', label: 'Packing', icon: Package },
   { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', icon: Truck },
   { key: 'DELIVERED', label: 'Delivered', icon: Home },
 ];
 
 export default function TrackOrderPage() {
-  const [searchParams] = useSearchParams();
-  const [orderNumber, setOrderNumber] = useState(searchParams.get('order') ?? '');
-  const [search, setSearch] = useState(orderNumber);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initial = (searchParams.get('order') ?? '').trim().toUpperCase();
+  const [orderNumber, setOrderNumber] = useState(initial);
+  const [search, setSearch] = useState(initial);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['track-order', search],
-    queryFn: () => orderApi.track(search).then((r) => r.data),
-    enabled: !!search,
-    refetchInterval: 10000,
+  const hasSearch = search.trim().length > 0;
+
+  const { data: order, isLoading, error, isFetching } = useQuery({
+    queryKey: ['track-order', search.trim()],
+    queryFn: async () => {
+      const found = await getOrderByNumber(search.trim());
+      if (!found) throw new Error('Order not found');
+      return found;
+    },
+    enabled: hasSearch,
+    refetchInterval: hasSearch ? 10_000 : false,
+    retry: false,
   });
 
-  const order = data?.order;
   const currentIndex = STATUS_STEPS.findIndex((s) => s.key === order?.status);
+  const showResults = hasSearch;
+
+  function clearTracking() {
+    setOrderNumber('');
+    setSearch('');
+    setSearchParams({}, { replace: true });
+  }
+
+  function onInputChange(value: string) {
+    const next = value.toUpperCase();
+    setOrderNumber(next);
+    // Clearing the field resets results immediately (no leftover “In progress…”)
+    if (!next.trim()) {
+      setSearch('');
+      if (searchParams.get('order')) {
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }
+
+  function runTrack() {
+    const trimmed = orderNumber.trim();
+    if (!trimmed) {
+      clearTracking();
+      return;
+    }
+    setSearch(trimmed);
+    setSearchParams({ order: trimmed }, { replace: true });
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -40,27 +75,49 @@ export default function TrackOrderPage() {
       <div className="mb-8 flex gap-2">
         <input
           value={orderNumber}
-          onChange={(e) => setOrderNumber(e.target.value.toUpperCase())}
-          placeholder="e.g. AY20260721-ABC123"
+          onChange={(e) => onInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') runTrack();
+          }}
+          placeholder="e.g. AY-12345678"
           className="flex-1 rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+          aria-label="Order tracking number"
         />
+        {orderNumber.trim() ? (
+          <button
+            type="button"
+            onClick={clearTracking}
+            className="rounded-xl border border-white/20 px-4 font-semibold text-white/80 hover:border-brand-gold hover:text-brand-gold"
+          >
+            Clear
+          </button>
+        ) : null}
         <button
-          onClick={() => setSearch(orderNumber)}
+          type="button"
+          onClick={runTrack}
           className="rounded-xl bg-brand-gold px-6 font-semibold text-white hover:bg-brand-gold-dark"
         >
           Track
         </button>
       </div>
 
-      {isLoading && <div className="h-40 animate-pulse rounded-2xl bg-brand-dark-light" />}
+      {!showResults && (
+        <p className="rounded-2xl border border-white/10 bg-brand-dark-light p-6 text-center text-sm text-white/50">
+          Enter your tracking number above, then tap Track.
+        </p>
+      )}
 
-      {error && (
+      {showResults && (isLoading || isFetching) && !order && (
+        <div className="h-40 animate-pulse rounded-2xl bg-brand-dark-light" />
+      )}
+
+      {showResults && error && !isLoading && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400">
           Order not found. Please check your order number.
         </div>
       )}
 
-      {order && (
+      {showResults && order && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <div className="mb-6 rounded-xl border border-white/10 bg-brand-dark-light p-4">
             <div className="flex justify-between">
@@ -75,11 +132,19 @@ export default function TrackOrderPage() {
             </div>
           </div>
 
+          {order.status === 'CANCELLED' ? (
+            <div className="mb-8 rounded-xl border border-red-500/40 bg-red-500/10 p-4">
+              <p className="font-semibold text-red-300">This order was cancelled</p>
+              <p className="mt-1 text-sm text-white/60">
+                If you already paid, contact support with your order number.
+              </p>
+            </div>
+          ) : (
           <div className="mb-8 space-y-4">
             {STATUS_STEPS.map((step, i) => {
               const Icon = step.icon;
-              const isComplete = i <= currentIndex;
-              const isCurrent = i === currentIndex;
+              const isComplete = currentIndex >= 0 && i <= currentIndex;
+              const isCurrent = currentIndex >= 0 && i === currentIndex;
               return (
                 <div key={step.key} className="flex items-center gap-4">
                   <div
@@ -92,19 +157,25 @@ export default function TrackOrderPage() {
                   <div>
                     <p className={isComplete ? 'font-medium' : 'text-white/40'}>{step.label}</p>
                     {isCurrent && (
-                      <p className="text-xs text-brand-gold animate-pulse">In progress...</p>
+                      <p className="animate-pulse text-xs text-brand-gold">In progress...</p>
                     )}
                   </div>
                 </div>
               );
             })}
           </div>
+          )}
 
           <div className="rounded-xl border border-white/10 bg-brand-dark-light p-4">
             <h3 className="mb-3 font-semibold">Order Items</h3>
-            {order.items.map((item: { id: string; food: { name: string }; portionName: string; quantity: number; totalPrice: number }) => (
-              <div key={item.id} className="flex justify-between border-b border-white/5 py-2 text-sm last:border-0">
-                <span>{item.food.name} ({item.portionName}) ×{item.quantity}</span>
+            {order.items.map((item) => (
+              <div
+                key={item.id}
+                className="flex justify-between border-b border-white/5 py-2 text-sm last:border-0"
+              >
+                <span>
+                  {item.food.name} ({item.portionName}) ×{item.quantity}
+                </span>
                 <span className="text-brand-gold">{formatCurrency(item.totalPrice)}</span>
               </div>
             ))}

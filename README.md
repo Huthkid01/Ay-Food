@@ -60,45 +60,74 @@ cd .. && npm run dev
 
 ```
 Ay Food/
-├── frontend/       # React 19 + Vite app
-├── backend/        # Fastify API + Prisma
-├── docker-compose.yml
-└── nginx/          # Production reverse proxy
+├── frontend/                 # React + Vite (host on Vercel)
+│   ├── .env.example          # ← copy to .env.local (anon key + URL)
+│   └── .env.local            # ← YOU create this (gitignored)
+├── supabase/                 # ← Database + Edge Functions (host on Supabase)
+│   ├── migrations/           # SQL migrations (db push)
+│   ├── functions/            # Edge Functions (create-order, payments, track)
+│   └── config.toml
+├── backend/                  # Legacy Fastify/Prisma (optional; migrating off)
+└── README.md
 ```
 
-## Docker (Production)
+## Env file for Supabase anon key + URL
+
+**File to create:** [`frontend/.env.local`](frontend/.env.local)
 
 ```bash
-docker compose up --build
+cd frontend
+cp .env.example .env.local
 ```
 
-## Supabase Setup
-
-1. Create a project at [supabase.com](https://supabase.com)
-2. Go to **Project Settings → Database → Connection string**
-3. Copy both connection strings into `backend/.env`:
+Then paste from Supabase → **Project Settings → API**:
 
 ```env
-# Transaction pooler (port 6543) — used by the app at runtime
-DATABASE_URL="postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?pgbouncer=true"
-
-# Direct connection (port 5432) — used for migrations
-DIRECT_URL="postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres"
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOi...your-anon-key
 ```
 
-4. Run migrations and seed data:
+Also add the same two variables in **Vercel → Project → Settings → Environment Variables**.
+
+Do **not** put the service role key in the frontend. That goes in Edge Function secrets.
+
+## Supabase CLI (login + migrations + Edge Functions)
 
 ```bash
-cd backend
-npm run db:setup    # applies migrations + seeds menu
+# 1) Login in your terminal (opens browser)
+npx supabase login
+
+# 2) Link this repo to your project (enter project ref when asked)
+npx supabase link --project-ref YOUR_PROJECT_REF
+
+# 3) Push SQL migrations (creates tables, RLS, realtime)
+npx supabase db push
+
+# 4) Deploy Edge Functions
+npx supabase functions deploy create-order
+npx supabase functions deploy payment-init
+npx supabase functions deploy payment-verify
+npx supabase functions deploy track-order
+
+# 5) Set secrets (service role + payment keys)
+npx supabase secrets set APP_URL=https://your-vercel-app.vercel.app
+# SUPABASE_SERVICE_ROLE_KEY is usually injected automatically for functions
 ```
 
-For schema changes later:
+Or use npm shortcuts from the repo root: `npm run supabase:login` · `supabase:link` · `supabase:push` · `supabase:functions`.
 
-```bash
-npm run db:migrate  # create & apply new migration (dev)
-npm run db:migrate:deploy  # apply migrations in production
-```
+### Realtime
+Migration enables Realtime on `orders`, `order_items`, `foods`, `categories`, `payments`. Admin dashboard uses `useAdminRealtime` (same pattern as Nexlogs) so kitchen updates live without refresh.
+
+## Legacy Prisma connection (optional)
+
+If you still run the Fastify API locally:
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Put pooler URLs in `backend/.env` (`DATABASE_URL` + `DIRECT_URL`) — no leftover `[REGION]` brackets
+3. `cd backend && npm run db:setup`
+
+Preferred path going forward: **Vercel frontend + Supabase migrations/functions** (no Fastify host required).
 
 ## Environment Variables
 

@@ -39,14 +39,18 @@ export const paymentApi = {
   verify: (reference: string) => api.post(`/payments/verify/${reference}`),
 };
 
-export const couponApi = {
-  validate: (code: string, subtotal: number) => api.post('/coupons/validate', { code, subtotal }),
-};
-
 export const adminApi = {
   dashboard: () => api.get('/admin/dashboard'),
   foods: () => api.get('/admin/foods'),
   inventory: () => api.get('/admin/inventory'),
+  orders: () => api.get('/admin/orders'),
+  updateOrderStatus: (id: string, status: string) =>
+    api.patch(`/admin/orders/${id}/status`, { status }),
+  updateFood: (id: string, data: Record<string, unknown>) => api.patch(`/admin/foods/${id}`, data),
+  categories: () => api.get('/admin/categories'),
+  updateCategory: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/admin/categories/${id}`, data),
+  customers: () => api.get('/admin/customers'),
 };
 
 export default api;

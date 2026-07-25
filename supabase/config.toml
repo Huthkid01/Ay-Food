@@ -1,0 +1,26 @@
+# Ay Food — Supabase CLI
+# Docs: https://supabase.com/docs/guides/cli
+
+project_id = "ilxehjqjwybeopalmbeb"
+
+[api]
+enabled = true
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+
+# Edge Functions — JWT verification
+[functions.create-order]
+verify_jwt = false
+
+[functions.payment-init]
+verify_jwt = false
+
+[functions.payment-verify]
+verify_jwt = false
+
+[functions.track-order]
+verify_jwt = false

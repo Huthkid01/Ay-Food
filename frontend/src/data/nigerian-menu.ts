@@ -1,4 +1,8 @@
-import type { Food } from '../types';
+import type { Food, FoodPortion } from '../types';
+import { getFoodImageUrl } from '../utils/food-images';
+import { formatCurrency, slugify } from '../utils/helpers';
+
+type PortionSeed = { name: string; price: number };
 
 type MenuSeed = {
   name: string;
@@ -6,69 +10,244 @@ type MenuSeed = {
   category: string;
   categoryName: string;
   description: string;
-  price: number;
+  /** Single price (standard size). Ignored when `portions` is set. */
+  price?: number;
+  portions?: PortionSeed[];
   isPopular?: boolean;
   isNew?: boolean;
 };
 
+/**
+ * Official A.Y Food Mega Palace menu (flyer).
+ * Categories: Swallow · Meals · Protein · Sides · Soups
+ */
 const MENU_SEEDS: MenuSeed[] = [
-  // Rice
-  { name: 'Jollof Rice', slug: 'jollof-rice', category: 'rice', categoryName: 'Rice', description: 'Smoky party-style jollof with rich tomato base', price: 1200, isPopular: true },
-  { name: 'Fried Rice', slug: 'fried-rice', category: 'rice', categoryName: 'Rice', description: 'Colorful Nigerian fried rice with mixed vegetables', price: 1100, isPopular: true },
-  { name: 'Ofada Rice & Ayamase', slug: 'ofada-rice', category: 'rice', categoryName: 'Rice', description: 'Local ofada rice served with spicy ayamase sauce', price: 1500 },
-  { name: 'White Rice', slug: 'white-rice', category: 'rice', categoryName: 'Rice', description: 'Steamed long grain white rice', price: 800 },
-  { name: 'Coconut Rice', slug: 'coconut-rice', category: 'rice', categoryName: 'Rice', description: 'Fragrant coconut-infused rice', price: 1300 },
-  { name: 'Native Jollof Rice', slug: 'native-jollof', category: 'rice', categoryName: 'Rice', description: 'Traditional pot jollof with local spices', price: 1400, isPopular: true },
-  // Swallow
-  { name: 'Amala', slug: 'amala', category: 'swallow', categoryName: 'Swallow', description: 'Smooth yam flour swallow', price: 900, isPopular: true },
-  { name: 'Eba', slug: 'eba', category: 'swallow', categoryName: 'Swallow', description: 'Classic garri swallow', price: 700 },
-  { name: 'Pounded Yam', slug: 'pounded-yam', category: 'swallow', categoryName: 'Swallow', description: 'Soft hand-pounded yam', price: 1200, isPopular: true },
-  { name: 'Semovita', slug: 'semovita', category: 'swallow', categoryName: 'Swallow', description: 'Light semolina swallow', price: 800 },
-  { name: 'Fufu', slug: 'fufu', category: 'swallow', categoryName: 'Swallow', description: 'Traditional cassava fufu', price: 750 },
-  { name: 'Wheat Swallow', slug: 'wheat-swallow', category: 'swallow', categoryName: 'Swallow', description: 'Soft wheat meal swallow', price: 850 },
-  { name: 'Starch', slug: 'starch', category: 'swallow', categoryName: 'Swallow', description: 'Delta-style starch swallow', price: 900 },
-  // Soups
-  { name: 'Egusi Soup', slug: 'egusi-soup', category: 'soup', categoryName: 'Soup', description: 'Rich melon seed soup with leafy greens', price: 1800, isPopular: true },
-  { name: 'Efo Riro', slug: 'efo-riro', category: 'soup', categoryName: 'Soup', description: 'Spinach stew with assorted meat', price: 1700, isPopular: true },
-  { name: 'Okra Soup', slug: 'okra-soup', category: 'soup', categoryName: 'Soup', description: 'Draw soup with fresh okra', price: 1600 },
-  { name: 'Pepper Soup', slug: 'pepper-soup', category: 'soup', categoryName: 'Soup', description: 'Spicy aromatic broth with herbs', price: 2000, isPopular: true },
-  { name: 'Ogbono Soup', slug: 'ogbono-soup', category: 'soup', categoryName: 'Soup', description: 'Wild mango seed draw soup', price: 1650 },
-  { name: 'Bitterleaf Soup', slug: 'bitterleaf-soup', category: 'soup', categoryName: 'Soup', description: 'Traditional onugbu soup', price: 1750 },
-  { name: 'Banga Soup', slug: 'banga-soup', category: 'soup', categoryName: 'Soup', description: 'Palm nut soup with fresh fish', price: 1900 },
-  { name: 'Oha Soup', slug: 'oha-soup', category: 'soup', categoryName: 'Soup', description: 'Igbo-style oha leaf soup', price: 1850 },
-  { name: 'Edikaikong', slug: 'edikaikong', category: 'soup', categoryName: 'Soup', description: 'Mixed vegetable soup with assorted meat', price: 1800 },
-  // Proteins
-  { name: 'Grilled Chicken', slug: 'grilled-chicken', category: 'proteins', categoryName: 'Proteins', description: 'Marinated flame-grilled chicken', price: 2500, isPopular: true },
-  { name: 'Beef Suya', slug: 'beef-suya', category: 'proteins', categoryName: 'Proteins', description: 'Spicy grilled beef skewers', price: 2000, isPopular: true },
-  { name: 'Goat Meat Pepper Soup', slug: 'goat-meat', category: 'proteins', categoryName: 'Proteins', description: 'Tender peppered goat meat', price: 2800 },
-  { name: 'Grilled Catfish', slug: 'grilled-fish', category: 'proteins', categoryName: 'Proteins', description: 'Whole grilled catfish', price: 3500 },
-  { name: 'Moi Moi', slug: 'moi-moi', category: 'proteins', categoryName: 'Proteins', description: 'Steamed bean pudding with egg', price: 800 },
-  { name: 'Beans Porridge', slug: 'beans-porridge', category: 'proteins', categoryName: 'Proteins', description: 'Slow-cooked Nigerian beans', price: 1000 },
-  { name: 'Turkey Wings', slug: 'turkey-wings', category: 'proteins', categoryName: 'Proteins', description: 'Seasoned roasted turkey wings', price: 2200 },
-  { name: 'Nkwobi', slug: 'nkwobi', category: 'proteins', categoryName: 'Proteins', description: 'Spicy cow foot delicacy', price: 3200, isNew: true },
-  { name: 'Fried Chicken (2 Pieces)', slug: 'fried-chicken-2', category: 'proteins', categoryName: 'Proteins', description: 'Crispy fried chicken pieces', price: 2200 },
-  // Breakfast
-  { name: 'Akara (4pcs)', slug: 'akara', category: 'breakfast', categoryName: 'Breakfast', description: 'Crispy bean fritters', price: 800 },
-  { name: 'Pap & Akara', slug: 'pap-akara', category: 'breakfast', categoryName: 'Breakfast', description: 'Traditional pap with akara', price: 1000, isPopular: true },
-  { name: 'Yam & Egg Sauce', slug: 'yam-egg-sauce', category: 'breakfast', categoryName: 'Breakfast', description: 'Boiled yam with tomato egg sauce', price: 1500 },
-  { name: 'Bread & Egg', slug: 'bread-egg', category: 'breakfast', categoryName: 'Breakfast', description: 'Toasted bread with fried eggs', price: 1200 },
-  // Extras & sides
-  { name: 'Fried Plantain (Dodo)', slug: 'fried-plantain', category: 'extras', categoryName: 'Extras', description: 'Sweet fried plantain slices', price: 600, isPopular: true },
-  { name: 'Coleslaw', slug: 'coleslaw', category: 'extras', categoryName: 'Extras', description: 'Fresh creamy coleslaw', price: 500 },
-  { name: 'Garden Salad', slug: 'garden-salad', category: 'extras', categoryName: 'Extras', description: 'Mixed greens with dressing', price: 700 },
-  // Snacks & fast food
-  { name: 'Chicken Shawarma', slug: 'shawarma', category: 'snacks', categoryName: 'Snacks', description: 'Chicken shawarma wrap', price: 2500, isPopular: true },
-  { name: 'Meat Pie', slug: 'meat-pie', category: 'snacks', categoryName: 'Snacks', description: 'Flaky pastry with minced beef', price: 800 },
-  { name: 'Puff Puff (6pcs)', slug: 'puff-puff', category: 'snacks', categoryName: 'Snacks', description: 'Golden fried dough balls', price: 500 },
-  { name: 'Boli & Groundnut', slug: 'boli-groundnut', category: 'snacks', categoryName: 'Snacks', description: 'Roasted plantain with groundnut', price: 600 },
-  // Drinks
-  { name: 'Chapman', slug: 'chapman', category: 'drinks', categoryName: 'Drinks', description: 'Nigerian fruit punch cocktail', price: 1500, isPopular: true },
-  { name: 'Zobo', slug: 'zobo', category: 'drinks', categoryName: 'Drinks', description: 'Hibiscus drink with spices', price: 800 },
-  { name: 'Fresh Orange Juice', slug: 'orange-juice', category: 'drinks', categoryName: 'Drinks', description: 'Freshly squeezed orange juice', price: 1200 },
-  { name: 'Malt Drink', slug: 'malt-drink', category: 'drinks', categoryName: 'Drinks', description: 'Chilled malt beverage', price: 600 },
-  { name: 'Soft Drink', slug: 'soft-drink', category: 'drinks', categoryName: 'Drinks', description: 'Coca-Cola, Pepsi or Fanta', price: 500 },
-  { name: 'Bottled Water', slug: 'bottled-water', category: 'drinks', categoryName: 'Drinks', description: '500ml still water', price: 300 },
+  // —— Swallow ——
+  { name: 'Amala', slug: 'amala', category: 'swallow', categoryName: 'Swallow', description: 'Smooth yam flour swallow', price: 500, isPopular: true },
+  { name: 'Eba', slug: 'eba', category: 'swallow', categoryName: 'Swallow', description: 'Classic garri swallow', price: 500 },
+  { name: 'Semo', slug: 'semo', category: 'swallow', categoryName: 'Swallow', description: 'Light semolina swallow', price: 500 },
+  { name: 'Pounded Yam', slug: 'pounded-yam', category: 'swallow', categoryName: 'Swallow', description: 'Soft pounded yam', price: 500, isPopular: true },
+
+  // —— Meals ——
+  { name: 'Jollof Rice', slug: 'jollof-rice', category: 'meals', categoryName: 'Meals', description: 'Party-style Nigerian jollof', price: 500, isPopular: true },
+  { name: 'Fried Rice', slug: 'fried-rice', category: 'meals', categoryName: 'Meals', description: 'Nigerian fried rice', price: 500, isPopular: true },
+  { name: 'Ofada Rice', slug: 'ofada-rice', category: 'meals', categoryName: 'Meals', description: 'Local ofada rice', price: 500 },
+  { name: 'Beans', slug: 'beans', category: 'meals', categoryName: 'Meals', description: 'Well-cooked Nigerian beans', price: 500 },
+  { name: 'Spaghetti', slug: 'spaghetti', category: 'meals', categoryName: 'Meals', description: 'Savory spaghetti', price: 500 },
+  { name: 'Porridge Yam', slug: 'porridge-yam', category: 'meals', categoryName: 'Meals', description: 'Yam porridge', price: 500 },
+  { name: 'Yam', slug: 'yam', category: 'meals', categoryName: 'Meals', description: 'Boiled or fried yam', price: 500 },
+  { name: 'Special Rice', slug: 'special-rice', category: 'meals', categoryName: 'Meals', description: 'Chef special rice', price: 1000, isPopular: true },
+
+  // —— Protein (multi-size prices from flyer) ——
+  { name: 'Goat Meat', slug: 'goat-meat', category: 'protein', categoryName: 'Protein', description: 'Tender goat meat', price: 2000, isPopular: true },
+  { name: 'Beef', slug: 'beef', category: 'protein', categoryName: 'Protein', description: 'Seasoned beef', price: 500 },
+  { name: 'Ponmo', slug: 'ponmo', category: 'protein', categoryName: 'Protein', description: 'Soft cow skin', price: 500 },
+  { name: 'Egg', slug: 'egg', category: 'protein', categoryName: 'Protein', description: 'Fried or boiled egg', price: 400 },
+  {
+    name: 'Turkey',
+    slug: 'turkey',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Whole turkey — choose size',
+    portions: [
+      { name: 'Regular', price: 5500 },
+      { name: 'Large', price: 6000 },
+    ],
+    isPopular: true,
+  },
+  {
+    name: 'Chicken',
+    slug: 'chicken',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Whole chicken — choose size',
+    portions: [
+      { name: 'Regular', price: 4500 },
+      { name: 'Large', price: 5000 },
+    ],
+    isPopular: true,
+  },
+  {
+    name: 'Wings / Laps',
+    slug: 'wings-laps',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Chicken wings or laps',
+    portions: [
+      { name: 'Small', price: 2000 },
+      { name: 'Medium', price: 2500 },
+      { name: 'Large', price: 3000 },
+    ],
+  },
+  {
+    name: 'Hake Fish',
+    slug: 'hake-fish',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Fresh hake fish',
+    portions: [
+      { name: 'Size 1', price: 2000 },
+      { name: 'Size 2', price: 2500 },
+      { name: 'Size 3', price: 3000 },
+      { name: 'Size 4', price: 4000 },
+    ],
+  },
+  {
+    name: 'Titus Fish',
+    slug: 'titus-fish',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Titus (mackerel) fish',
+    portions: [
+      { name: 'Size 1', price: 2000 },
+      { name: 'Size 2', price: 2500 },
+      { name: 'Size 3', price: 3000 },
+      { name: 'Size 4', price: 3500 },
+    ],
+  },
+  {
+    name: 'Fresh Fish',
+    slug: 'fresh-fish',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Fresh fish — choose size',
+    portions: [
+      { name: 'Size 1', price: 3000 },
+      { name: 'Size 2', price: 4000 },
+      { name: 'Size 3', price: 5000 },
+    ],
+  },
+  {
+    name: 'Cat Fish',
+    slug: 'cat-fish',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Catfish',
+    portions: [
+      { name: 'Regular', price: 2000 },
+      { name: 'Large', price: 3000 },
+    ],
+  },
+  {
+    name: 'Gizzard',
+    slug: 'gizzard',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Peppered gizzard',
+    portions: [
+      { name: 'Regular', price: 1000 },
+      { name: 'Large', price: 1500 },
+    ],
+  },
+  {
+    name: 'Panla Kika',
+    slug: 'panla-kika',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Dried panla fish',
+    portions: [
+      { name: 'Regular', price: 1000 },
+      { name: 'Large', price: 1500 },
+    ],
+  },
+  {
+    name: 'Brokoto',
+    slug: 'brokoto',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Assorted brokoto',
+    portions: [
+      { name: 'Regular', price: 2500 },
+      { name: 'Large', price: 3000 },
+    ],
+  },
+  {
+    name: 'Snail',
+    slug: 'snail',
+    category: 'protein',
+    categoryName: 'Protein',
+    description: 'Peppered snail',
+    portions: [
+      { name: 'Small', price: 1000 },
+      { name: 'Medium', price: 1500 },
+      { name: 'Large', price: 4000 },
+    ],
+  },
+
+  // —— Sides ——
+  {
+    name: 'Plantain',
+    slug: 'plantain',
+    category: 'sides',
+    categoryName: 'Sides',
+    description: 'Fried plantain — seasonal price (confirm when ordering)',
+    portions: [{ name: 'Seasonal', price: 0 }],
+    isPopular: true,
+  },
+  { name: 'Moi Moi', slug: 'moi-moi', category: 'sides', categoryName: 'Sides', description: 'Steamed bean pudding', price: 600 },
+  { name: 'Salad', slug: 'salad', category: 'sides', categoryName: 'Sides', description: 'Fresh garden salad', price: 700 },
+
+  // —— Soups (listed on flyer without fixed prices — confirm with kitchen) ——
+  {
+    name: 'Ewedu',
+    slug: 'ewedu',
+    category: 'soups',
+    categoryName: 'Soups',
+    description: 'Draw soup — pair with swallow; confirm price when ordering',
+    portions: [{ name: 'With swallow', price: 0 }],
+  },
+  {
+    name: 'Gbegiri',
+    slug: 'gbegiri',
+    category: 'soups',
+    categoryName: 'Soups',
+    description: 'Bean soup — pair with swallow; confirm price when ordering',
+    portions: [{ name: 'With swallow', price: 0 }],
+  },
+  {
+    name: 'Egusi',
+    slug: 'egusi',
+    category: 'soups',
+    categoryName: 'Soups',
+    description: 'Melon seed soup — pair with swallow; confirm price when ordering',
+    portions: [{ name: 'With swallow', price: 0 }],
+    isPopular: true,
+  },
+  {
+    name: 'Okro',
+    slug: 'okro',
+    category: 'soups',
+    categoryName: 'Soups',
+    description: 'Okra soup — pair with swallow; confirm price when ordering',
+    portions: [{ name: 'With swallow', price: 0 }],
+  },
+  {
+    name: 'Efo Riro',
+    slug: 'efo-riro',
+    category: 'soups',
+    categoryName: 'Soups',
+    description: 'Vegetable stew — pair with swallow; confirm price when ordering',
+    portions: [{ name: 'With swallow', price: 0 }],
+    isPopular: true,
+  },
 ];
+
+function toPortions(seed: MenuSeed): FoodPortion[] {
+  const list =
+    seed.portions ??
+    (seed.price !== undefined
+      ? [{ name: 'Standard', price: seed.price }]
+      : [{ name: 'Standard', price: 0 }]);
+
+  return list.map((p) => {
+    const portionSlug = slugify(p.name);
+    return {
+      id: `${seed.slug}-${portionSlug}`,
+      price: p.price,
+      portion: { id: portionSlug, name: p.name, slug: portionSlug },
+    };
+  });
+}
 
 function toFood(seed: MenuSeed): Food {
   return {
@@ -76,33 +255,39 @@ function toFood(seed: MenuSeed): Food {
     name: seed.name,
     slug: seed.slug,
     description: seed.description,
+    image: getFoodImageUrl(seed.slug, seed.category),
     tags: seed.isPopular ? 'popular' : '',
     isPopular: seed.isPopular ?? false,
     isNew: seed.isNew ?? false,
     prepTimeMinutes: 25,
     category: { name: seed.categoryName, slug: seed.category },
-    portions: [
-      {
-        id: `${seed.slug}-medium`,
-        price: seed.price,
-        portion: { id: 'medium', name: 'Medium', slug: 'medium' },
-      },
-    ],
+    portions: toPortions(seed),
   };
 }
 
 export const NIGERIAN_MENU_FOODS: Food[] = MENU_SEEDS.map(toFood);
 
+/** Bump when the official flyer menu changes so local admin catalogs reseed. */
+export const MENU_SEED_VERSION = 'ay-flyer-v1';
+
 export const MENU_CATEGORIES = [
-  { id: 'rice', name: 'Rice', slug: 'rice' },
   { id: 'swallow', name: 'Swallow', slug: 'swallow' },
-  { id: 'soup', name: 'Soups', slug: 'soup' },
-  { id: 'proteins', name: 'Proteins', slug: 'proteins' },
-  { id: 'breakfast', name: 'Breakfast', slug: 'breakfast' },
-  { id: 'snacks', name: 'Snacks & Fast Food', slug: 'snacks' },
-  { id: 'drinks', name: 'Drinks', slug: 'drinks' },
-  { id: 'extras', name: 'Extras', slug: 'extras' },
+  { id: 'meals', name: 'Meals', slug: 'meals' },
+  { id: 'protein', name: 'Protein', slug: 'protein' },
+  { id: 'sides', name: 'Sides', slug: 'sides' },
+  { id: 'soups', name: 'Soups', slug: 'soups' },
 ];
+
+/** Display price or range; ₦0 (free) items still show as currency so totals stay clear. */
+export function formatMenuPrice(portions: FoodPortion[]): string {
+  if (portions.length === 0) return formatCurrency(0);
+  const prices = portions.map((p) => p.price).filter((p) => Number.isFinite(p) && p >= 0);
+  if (prices.length === 0) return formatCurrency(0);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  if (min === max) return formatCurrency(min);
+  return `${formatCurrency(min)} – ${formatCurrency(max)}`;
+}
 
 export function filterMenuFoods(foods: Food[], category: string, search: string): Food[] {
   let list = foods;

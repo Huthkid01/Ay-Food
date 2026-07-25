@@ -31,9 +31,15 @@ Thumbs.db
 # Coverage / test
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
+frontend/test-results/
+frontend/playwright-report/
 
 # Misc
 *.local
 .cache/
 tmp/
 temp/
+redirect-test/
+supabase/.temp/
