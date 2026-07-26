@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
 import { Check, Clock, Package, Truck, Home } from 'lucide-react';
 import { getOrderByNumber } from '../services/orders.service';
 import { formatCurrency } from '../utils/helpers';
@@ -118,7 +117,7 @@ export default function TrackOrderPage() {
       )}
 
       {showResults && order && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="animate-fade-up">
           <div className="mb-6 rounded-xl border border-white/10 bg-brand-dark-light p-4">
             <div className="flex justify-between">
               <div>
@@ -180,7 +179,7 @@ export default function TrackOrderPage() {
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   );

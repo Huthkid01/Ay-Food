@@ -47,53 +47,6 @@ async function fetchJson(url: string, timeoutMs = 5000): Promise<unknown> {
   return res.json();
 }
 
-/** Reverse-geocode GPS coords → city / region / country (no API key). */
-async function reverseGeocode(lat: number, lon: number): Promise<VisitorLocation | null> {
-  try {
-    const data = (await fetchJson(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
-    )) as {
-      city?: string;
-      locality?: string;
-      principalSubdivision?: string;
-      countryName?: string;
-    };
-    const location: VisitorLocation = {
-      city: data.city || data.locality || null,
-      region: data.principalSubdivision || null,
-      country: data.countryName || null,
-      source: 'gps',
-    };
-    return hasLocation(location) ? location : null;
-  } catch {
-    return null;
-  }
-}
-
-function getCurrentPosition(timeoutMs = 8000): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      reject(new Error('Geolocation not supported'));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      timeout: timeoutMs,
-      maximumAge: 10 * 60 * 1000,
-    });
-  });
-}
-
-/** Real device GPS (asks browser permission once) + reverse geocode. */
-async function resolveFromBrowserGps(): Promise<VisitorLocation | null> {
-  try {
-    const pos = await getCurrentPosition(8000);
-    return reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-  } catch {
-    return null;
-  }
-}
-
 /** Real public IP → approximate city / region / country. */
 async function resolveFromIp(): Promise<VisitorLocation> {
   // 1) geojs — reliable CORS + free
@@ -160,65 +113,20 @@ async function resolveFromIp(): Promise<VisitorLocation> {
 }
 
 /**
- * Resolve the visitor’s real location:
- * 1) Browser GPS (if allowed) → reverse geocode
- * 2) Otherwise their public IP address lookup
- * Never invents fake places — Unknown if both fail.
+ * Resolve the visitor’s approximate location for analytics.
+ * Uses IP only — never asks for GPS (that prompt is reserved for checkout
+ * “Use current location”, so a Deny here doesn’t lock delivery forever).
  */
 export async function getVisitorLocation(): Promise<VisitorLocation> {
   const cached = readCache();
 
-  // Already have precise GPS for this tab
-  if (cached?.source === 'gps' && hasLocation(cached)) {
+  if (cached?.resolved) {
     return stripCache(cached);
   }
 
-  // Have IP from earlier — return it fast, still try to upgrade to GPS
-  if (cached && hasLocation(cached)) {
-    void resolveFromBrowserGps().then((gps) => {
-      if (gps && hasLocation(gps)) writeCache(gps);
-    });
-    return stripCache(cached);
-  }
-
-  // Miss-cache: don't hammer APIs every heartbeat
-  if (cached?.resolved && !hasLocation(cached)) {
-    return stripCache(cached);
-  }
-
-  const ipPromise = resolveFromIp();
-  const gpsPromise = resolveFromBrowserGps();
-
-  // Prefer GPS if it answers quickly (user may need to allow the prompt)
-  const quickGps = await Promise.race([
-    gpsPromise,
-    new Promise<null>((resolve) => {
-      window.setTimeout(() => resolve(null), 4500);
-    }),
-  ]);
-
-  if (quickGps && hasLocation(quickGps)) {
-    writeCache(quickGps);
-    return quickGps;
-  }
-
-  const ip = await ipPromise;
-  if (hasLocation(ip)) {
-    writeCache(ip);
-    void gpsPromise.then((gps) => {
-      if (gps && hasLocation(gps)) writeCache(gps);
-    });
-    return ip;
-  }
-
-  const lateGps = await gpsPromise;
-  if (lateGps && hasLocation(lateGps)) {
-    writeCache(lateGps);
-    return lateGps;
-  }
-
-  writeCache(EMPTY);
-  return EMPTY;
+  const ip = await resolveFromIp();
+  writeCache(ip);
+  return ip;
 }
 
 /** Display label for admin — city, region, country (or Unknown). */

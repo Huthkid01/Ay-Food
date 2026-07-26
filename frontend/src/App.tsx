@@ -6,7 +6,7 @@ import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { ToastProvider } from './components/ui/Toast';
 import { useSiteRealtime } from './hooks/useSiteRealtime';
 import { useSiteVisitTracking } from './hooks/useSiteVisitTracking';
-import { getAdminToken } from './lib/admin-rpc';
+import { getAdminToken } from './lib/admin-token';
 import { SeoManager } from './components/SeoManager';
 import { Header, Footer } from './components/layout/Header';
 import { FloatingCart } from './components/layout/FloatingCart';

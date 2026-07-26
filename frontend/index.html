@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <title>Ay Food | A.Y Food Mega Palace &amp; A.Y Food Palace — Order Online | Ogijo</title>
@@ -45,7 +45,15 @@
     <meta name="ICBM" content="6.6977251, 3.5119394" />
     <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
     <link rel="dns-prefetch" href="https://images.unsplash.com" />
-    <link rel="preload" as="image" href="/assets/hero.png" fetchpriority="high" />
+    <link
+      rel="preload"
+      as="image"
+      type="image/webp"
+      href="/assets/hero-restaurant.webp"
+      imagesrcset="/assets/hero-restaurant-768.webp 800w, /assets/hero-restaurant.webp 1600w"
+      imagesizes="100vw"
+      fetchpriority="high"
+    />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -66,7 +74,7 @@
           "A.Y Mega Food Palace"
         ],
         "url": "https://www.ayfoodpalace.com/",
-        "logo": "https://www.ayfoodpalace.com/favicon.svg",
+        "logo": "https://www.ayfoodpalace.com/assets/ay-food-palace-logo-mark.svg",
         "image": [
           "https://www.ayfoodpalace.com/assets/hero.png",
           "https://www.ayfoodpalace.com/assets/hero-interior-1.png",
@@ -156,27 +164,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Tawk.to — start loading immediately (before React) -->
-    <script type="text/javascript">
-      var Tawk_API = Tawk_API || {},
-        Tawk_LoadStart = new Date();
-      Tawk_API.customStyle = {
-        visibility: {
-          desktop: { position: 'br', xOffset: 16, yOffset: 16 },
-          mobile: { position: 'br', xOffset: 12, yOffset: 12 },
-        },
-      };
-      (function () {
-        var s1 = document.createElement('script'),
-          s0 = document.getElementsByTagName('script')[0];
-        s1.id = 'tawk-to-script';
-        s1.async = true;
-        s1.src = 'https://embed.tawk.to/6a65570b15ab181d4e3c7bf2/1judto3bv';
-        s1.charset = 'UTF-8';
-        s1.setAttribute('crossorigin', '*');
-        s0.parentNode.insertBefore(s1, s0);
-      })();
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

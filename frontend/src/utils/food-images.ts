@@ -65,9 +65,49 @@ function u(id: string) {
   return buildUnsplashUrl(id, 'card');
 }
 
-export const HERO_IMAGE = '/assets/hero.png';
-export const HERO_INTERIOR_1 = '/assets/hero-interior-1.png';
-export const HERO_INTERIOR_2 = '/assets/hero-interior-2.png';
+export const HERO_IMAGE = '/assets/hero.webp';
+export const HERO_INTERIOR_1 = '/assets/hero-interior-1.webp';
+export const HERO_INTERIOR_2 = '/assets/hero-interior-2.webp';
+
+/** PNG fallbacks for older browsers / OG crawlers. */
+export const HERO_IMAGE_FALLBACK = '/assets/hero.png';
+export const HERO_INTERIOR_1_FALLBACK = '/assets/hero-interior-1.png';
+export const HERO_INTERIOR_2_FALLBACK = '/assets/hero-interior-2.png';
+
+const HERO_MOBILE: Record<string, string> = {
+  [HERO_IMAGE]: '/assets/hero-768.webp',
+  [HERO_INTERIOR_1]: '/assets/hero-interior-1-768.webp',
+  [HERO_INTERIOR_2]: '/assets/hero-interior-2-768.webp',
+  '/assets/hero.png': '/assets/hero-768.webp',
+  '/assets/hero-interior-1.png': '/assets/hero-interior-1-768.webp',
+  '/assets/hero-interior-2.png': '/assets/hero-interior-2-768.webp',
+};
+
+const HERO_FALLBACK: Record<string, string> = {
+  [HERO_IMAGE]: HERO_IMAGE_FALLBACK,
+  [HERO_INTERIOR_1]: HERO_INTERIOR_1_FALLBACK,
+  [HERO_INTERIOR_2]: HERO_INTERIOR_2_FALLBACK,
+  '/assets/hero.png': HERO_IMAGE_FALLBACK,
+  '/assets/hero-interior-1.png': HERO_INTERIOR_1_FALLBACK,
+  '/assets/hero-interior-2.png': HERO_INTERIOR_2_FALLBACK,
+};
+
+/** Prefer WebP hero paths even if CMS still stores .png. */
+export function normalizeHeroImage(src: string): string {
+  if (src.endsWith('/hero.png')) return HERO_IMAGE;
+  if (src.endsWith('/hero-interior-1.png')) return HERO_INTERIOR_1;
+  if (src.endsWith('/hero-interior-2.png')) return HERO_INTERIOR_2;
+  return src;
+}
+
+export function heroMobileSrc(src: string): string | undefined {
+  return HERO_MOBILE[normalizeHeroImage(src)] ?? HERO_MOBILE[src];
+}
+
+export function heroFallbackSrc(src: string): string {
+  const key = normalizeHeroImage(src);
+  return HERO_FALLBACK[key] ?? HERO_FALLBACK[src] ?? src;
+}
 
 export interface HeroSlide {
   image: string;
@@ -84,36 +124,36 @@ export interface HeroSlide {
 
 export const HERO_SLIDES: HeroSlide[] = [
   {
-    image: HERO_IMAGE,
-    tagline: 'Ogijo · Fresh daily',
-    title: 'Fresh Nigerian Meals,',
-    highlight: 'Delivered Hot.',
+    image: '/assets/hero-restaurant.webp',
+    tagline: 'Real restaurant · Ogijo',
+    title: 'Authentic Nigerian Dining',
+    highlight: 'in Ogijo',
     description:
-      'Order authentic Nigerian dishes prepared fresh daily from our Ogijo kitchen.',
+      'Visit our beautiful restaurant or order fresh Nigerian meals online for fast delivery and pickup.',
     primaryCta: { label: 'Order Now', to: '/menu' },
     secondaryCta: { label: 'Browse Menu', to: '/menu' },
-    imagePosition: '70% center',
+    imagePosition: 'center 40%',
   },
   {
-    image: HERO_INTERIOR_1,
-    tagline: 'Made to order',
-    title: 'Build Your Perfect',
-    highlight: 'Meal Pack',
+    image: '/assets/hero-signature.webp',
+    tagline: 'Signature kitchen',
+    title: 'Freshly Cooked.',
+    highlight: 'Delivered Hot.',
     description:
-      'Choose swallow, soups, proteins, and sides — customized to your taste and delivered hot.',
-    primaryCta: { label: 'Order Now', to: '/build' },
-    secondaryCta: { label: 'Browse Menu', to: '/menu' },
+      'Every meal is prepared fresh using quality ingredients and authentic Nigerian recipes.',
+    primaryCta: { label: 'Order Now', to: '/menu' },
+    secondaryCta: { label: 'Build Your Pack', to: '/build' },
     imagePosition: 'center',
   },
   {
-    image: HERO_INTERIOR_2,
-    tagline: 'Ogijo · Ikorodu · Lagos',
-    title: 'Hot Meals,',
-    highlight: 'To Your Door',
+    image: '/assets/hero-variety-alt.webp',
+    tagline: 'Full menu',
+    title: 'Something Delicious',
+    highlight: 'For Everyone',
     description:
-      'Same kitchen, same taste — order online for delivery or pickup. No account needed.',
-    primaryCta: { label: 'Order Now', to: '/menu' },
-    secondaryCta: { label: 'Browse Menu', to: '/menu' },
+      'Browse our full menu and discover authentic Nigerian meals made fresh every day.',
+    primaryCta: { label: 'Explore Menu', to: '/menu' },
+    secondaryCta: { label: 'Order Now', to: '/menu' },
     imagePosition: 'center',
   },
 ];

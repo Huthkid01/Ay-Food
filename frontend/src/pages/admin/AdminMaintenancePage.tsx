@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { siteSettingsService } from '../../services/site-visit.service';
+import { siteSettingsService } from '../../services/site-settings.service';
 import { useToast } from '../../components/ui/Toast';
 import { useState, useEffect } from 'react';
 

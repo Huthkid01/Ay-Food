@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" role="img" aria-label="Ay Food Palace">
+  <defs>
+    <linearGradient id="ayOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FB923C"/>
+      <stop offset="55%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#EA580C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon badge -->
+  <rect x="4" y="14" width="92" height="92" rx="22" fill="url(#ayOrange)"/>
+  <!-- Inner soft panel for contrast -->
+  <rect x="14" y="24" width="72" height="72" rx="16" fill="#111111" opacity="0.18"/>
+
+  <!-- Fork -->
+  <g fill="#FFFFFF">
+    <rect x="32" y="38" width="5.5" height="16" rx="1.5"/>
+    <rect x="40.5" y="38" width="5.5" height="16" rx="1.5"/>
+    <rect x="49" y="38" width="5.5" height="16" rx="1.5"/>
+    <path d="M32 54h22.5c0 6-4.2 10-8.5 11.2V88c0 2.2-1.8 4-4 4h-1.5c-2.2 0-4-1.8-4-4V65.2C33.8 64 32 60 32 54Z"/>
+  </g>
+
+  <!-- Knife -->
+  <g fill="#FFFFFF">
+    <path d="M66 40c8 10 8 22 2 34-1.2 2.4-4.8 2.2-5.6-.4-3.5-11.2-2.2-20.5 3.6-30.2.8-1.4 2.8-1.6 4-.4Z"/>
+    <rect x="62.5" y="72" width="6" height="18" rx="2"/>
+  </g>
+
+  <!-- Wordmark — Fraunces loaded site-wide; Georgia fallback -->
+  <g fill="#FFFFFF" font-family="Fraunces, Georgia, 'Times New Roman', serif">
+    <text x="118" y="58" font-size="42" font-weight="700" letter-spacing="-0.5">Ay Food</text>
+  </g>
+  <g fill="#F97316" font-family="'Plus Jakarta Sans', 'Segoe UI', sans-serif">
+    <text x="120" y="88" font-size="18" font-weight="700" letter-spacing="5">PALACE</text>
+  </g>
+</svg>

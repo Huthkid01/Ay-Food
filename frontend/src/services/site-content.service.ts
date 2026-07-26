@@ -1,5 +1,3 @@
-import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { adminRpc } from '../lib/admin-rpc';
 import {
   DEFAULT_SITE_CONTENT,
   type SiteContent,
@@ -336,6 +334,7 @@ export function subscribeSiteContentChanged(onChange: () => void) {
 
 export const siteContentService = {
   async get(): Promise<SiteContent> {
+    const { isSupabaseConfigured, supabase } = await import('../lib/supabase');
     if (isSupabaseConfigured()) {
       const { data, error } = await supabase
         .from('site_settings')
@@ -357,7 +356,9 @@ export const siteContentService = {
   async update(next: SiteContent): Promise<SiteContent> {
     const normalized = normalizeSiteContent(next);
 
+    const { isSupabaseConfigured } = await import('../lib/supabase');
     if (isSupabaseConfigured()) {
+      const { adminRpc } = await import('../lib/admin-rpc');
       await adminRpc('admin_update_site_content', {
         p_content: normalized,
       });

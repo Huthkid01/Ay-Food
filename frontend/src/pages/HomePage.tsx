@@ -119,10 +119,11 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="food-grid">
-              {nigerianDishes.map((food) => (
+              {nigerianDishes.map((food, index) => (
                 <FoodMenuCard
                   key={food.id}
                   food={food}
+                  priority={index < 3}
                   showCategory
                   showDescription
                   addLabelEmpty="Add to Cart"
@@ -147,11 +148,13 @@ export default function HomePage() {
         <div className="site-container">
           <div className="relative overflow-hidden rounded-[2rem] border border-brand-subtle px-8 py-16 text-center sm:px-12 sm:py-20">
             <img
-              src="/assets/hero-interior-1.png"
+              src="/assets/hero-interior-1.webp"
               alt=""
-              className="absolute inset-0 h-full w-full max-w-none object-cover"
+              width={1280}
+              height={1670}
               loading="lazy"
               decoding="async"
+              className="absolute inset-0 h-full w-full max-w-none object-cover opacity-40"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/78 to-black/70" />
             <div

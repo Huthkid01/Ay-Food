@@ -36,18 +36,22 @@ export default function BuildPackPage() {
   const { buildPage } = useSiteContentData();
 
   const editPackParam = searchParams.get('editPack');
+  const hasPacks = packs.length > 0;
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  /** Apply ?editPack= only when the URL param / pack count changes — clamp invalid indexes */
+  /**
+   * Sync selection from ?editPack= when the param changes, or when packs first hydrate.
+   * Intentionally ignores packs.length increases (add/duplicate) so the old editPack
+   * value cannot snap the Editing highlight back to the previous pack.
+   */
   useEffect(() => {
-    if (editPackParam === null) return;
+    if (editPackParam === null || !hasPacks) return;
     const parsed = parseInt(editPackParam, 10);
     if (Number.isNaN(parsed)) return;
-    if (packs.length === 0) return;
 
     const clamped = Math.min(Math.max(0, parsed), packs.length - 1);
     if (clamped !== parsed) {
@@ -63,7 +67,9 @@ export default function BuildPackPage() {
     }
 
     selectPack(clamped);
-  }, [editPackParam, packs.length, selectPack, setSearchParams]);
+    // packs.length read from render when hasPacks/editPackParam change — do not list it as a dep
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above
+  }, [editPackParam, hasPacks, selectPack, setSearchParams]);
 
   function focusPack(index: number, toastMsg?: string) {
     selectPack(index);
@@ -143,7 +149,7 @@ export default function BuildPackPage() {
                   }
                 }}
                 className={cn(
-                  'min-w-0 cursor-pointer rounded-xl border p-3 transition focus:outline-none focus:ring-2 focus:ring-brand-gold sm:rounded-2xl sm:p-4',
+                  'min-w-0 cursor-pointer rounded-xl border p-3 focus:outline-none focus:ring-2 focus:ring-brand-gold sm:rounded-2xl sm:p-4',
                   isEditing
                     ? 'border-brand-gold bg-brand-gold/10 ring-1 ring-brand-gold'
                     : 'border-white/10 bg-brand-dark-light hover:border-brand-gold/50'

@@ -1,5 +1,4 @@
-import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { adminRpc, getAdminToken } from '../lib/admin-rpc';
+import { getAdminToken } from '../lib/admin-token';
 import {
   clearVisitorSessionId,
   getVisitorSessionId,
@@ -54,6 +53,8 @@ export const siteVisitService = {
     try {
       if (path.startsWith('/admin') || path.startsWith('/formsubmit-ok')) return;
       if (getAdminToken()) return;
+
+      const { isSupabaseConfigured, supabase } = await import('../lib/supabase');
       if (!isSupabaseConfigured()) return;
 
       const heartbeat = options?.heartbeat ?? false;
@@ -62,7 +63,6 @@ export const siteVisitService = {
 
       const location: VisitorLocation = await getVisitorLocation();
 
-      // Re-check after await — admin may have signed in while location resolved
       if (getAdminToken()) return;
       if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
         return;
@@ -78,7 +78,6 @@ export const siteVisitService = {
         p_heartbeat: heartbeat,
       });
       if (error) {
-        // Soft-fail — never break the storefront
         console.warn('[site-visit]', error.message);
       }
     } catch (err) {
@@ -86,12 +85,13 @@ export const siteVisitService = {
     }
   },
 
-  /** Remove this browser's visit row(s) after admin login / session restore. */
   async purgeCurrentVisitorSession() {
+    const { isSupabaseConfigured } = await import('../lib/supabase');
     if (!isSupabaseConfigured() || !getAdminToken()) return;
     const sessionId = peekVisitorSessionId();
     if (!sessionId) return;
     try {
+      const { adminRpc } = await import('../lib/admin-rpc');
       await adminRpc('admin_purge_visitor_session', { p_session_id: sessionId });
     } catch {
       // RPC may not be deployed yet — still clear local id below
@@ -100,7 +100,9 @@ export const siteVisitService = {
   },
 
   async getStats(): Promise<SiteVisitorStats> {
+    const { isSupabaseConfigured } = await import('../lib/supabase');
     if (!isSupabaseConfigured()) return emptyStats();
+    const { adminRpc } = await import('../lib/admin-rpc');
     const row = await adminRpc<Record<string, unknown>>('admin_visitor_stats', {
       p_active_minutes: SITE_ACTIVE_WINDOW_MINUTES,
     });
@@ -113,7 +115,9 @@ export const siteVisitService = {
   },
 
   async getActiveSessions(): Promise<SiteSession[]> {
+    const { isSupabaseConfigured } = await import('../lib/supabase');
     if (!isSupabaseConfigured()) return [];
+    const { adminRpc } = await import('../lib/admin-rpc');
     const data = await adminRpc<SiteSession[]>('admin_active_sessions', {
       p_active_minutes: SITE_ACTIVE_WINDOW_MINUTES,
     });
@@ -121,7 +125,9 @@ export const siteVisitService = {
   },
 
   async getRecentPageViews(limit = 80): Promise<SitePageView[]> {
+    const { isSupabaseConfigured } = await import('../lib/supabase');
     if (!isSupabaseConfigured()) return [];
+    const { adminRpc } = await import('../lib/admin-rpc');
     const data = await adminRpc<SitePageView[]>('admin_recent_page_views', {
       p_limit: limit,
     });
@@ -129,76 +135,13 @@ export const siteVisitService = {
   },
 
   async clearAll() {
+    const { isSupabaseConfigured } = await import('../lib/supabase');
     if (!isSupabaseConfigured()) return;
+    const { adminRpc } = await import('../lib/admin-rpc');
     await adminRpc('admin_clear_site_visits');
   },
 };
 
-export type SiteSettings = {
-  maintenance_enabled: boolean;
-  maintenance_message: string;
-};
-
-/** Cache maintenance settings for instant paint; source of truth is Supabase. */
-const SETTINGS_CACHE_KEY = 'ay-food-site-settings';
-
-export const siteSettingsService = {
-  async get(): Promise<SiteSettings> {
-    if (isSupabaseConfigured()) {
-      const { data, error } = await supabase
-        .from('site_settings')
-        .select('maintenance_enabled, maintenance_message')
-        .eq('id', 'main')
-        .maybeSingle();
-      if (!error && data) {
-        const next = {
-          maintenance_enabled: data.maintenance_enabled,
-          maintenance_message: data.maintenance_message,
-        };
-        try {
-          localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(next));
-        } catch {
-          // ignore
-        }
-        return next;
-      }
-    }
-    try {
-      const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
-      if (raw) return JSON.parse(raw) as SiteSettings;
-    } catch {
-      // ignore
-    }
-    return {
-      maintenance_enabled: false,
-      maintenance_message: 'We are temporarily closed. Please check back soon.',
-    };
-  },
-
-  async update(patch: Partial<SiteSettings>): Promise<SiteSettings> {
-    const current = await this.get();
-    const next = { ...current, ...patch };
-    if (isSupabaseConfigured()) {
-      const row = await adminRpc<Record<string, unknown>>('admin_update_site_settings', {
-        p_maintenance_enabled: next.maintenance_enabled,
-        p_maintenance_message: next.maintenance_message,
-      });
-      const saved = {
-        maintenance_enabled: Boolean(row.maintenance_enabled),
-        maintenance_message: String(row.maintenance_message ?? next.maintenance_message),
-      };
-      try {
-        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(saved));
-      } catch {
-        // ignore
-      }
-      return saved;
-    }
-    try {
-      localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(next));
-    } catch {
-      // ignore
-    }
-    return next;
-  },
-};
+/** @deprecated import from site-settings.service */
+export { siteSettingsService } from './site-settings.service';
+export type { SiteSettings } from './site-settings.types';

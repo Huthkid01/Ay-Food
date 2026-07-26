@@ -9,12 +9,9 @@ import {
 } from 'react';
 import {
   ADMIN_UNAUTHORIZED_EVENT,
-  adminLogin,
-  adminLogout,
   getAdminToken,
   setAdminToken,
-} from '../lib/admin-rpc';
-import { siteVisitService } from '../services/site-visit.service';
+} from '../lib/admin-token';
 import type { User } from '../types';
 
 const SESSION_KEY = 'ay-food-admin-session';
@@ -62,7 +59,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(() => {
-    void adminLogout();
+    void import('../lib/admin-rpc').then(({ adminLogout }) => adminLogout());
     writeSession(null);
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
@@ -74,7 +71,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     const token = getAdminToken();
     if (session?.user && token) {
       setUser(session.user);
-      void siteVisitService.purgeCurrentVisitorSession();
+      void import('../services/site-visit.service').then(({ siteVisitService }) => {
+        void siteVisitService.purgeCurrentVisitorSession();
+      });
     } else {
       writeSession(null);
       setAdminToken(null);
@@ -95,6 +94,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    const { adminLogin } = await import('../lib/admin-rpc');
     const { email: loggedEmail } = await adminLogin(email, password);
     const adminUser: User = {
       id: 'db-admin',
@@ -105,7 +105,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     };
     writeSession({ user: adminUser });
     setUser(adminUser);
-    void siteVisitService.purgeCurrentVisitorSession();
+    void import('../services/site-visit.service').then(({ siteVisitService }) => {
+      void siteVisitService.purgeCurrentVisitorSession();
+    });
   }, []);
 
   const value = useMemo(
@@ -119,7 +121,9 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     [user, loading, login, logout]
   );
 
-  return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;
+  return (
+    <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>
+  );
 }
 
 export function useAdminAuth() {
@@ -128,7 +132,6 @@ export function useAdminAuth() {
   return ctx;
 }
 
-/** Login form email hint only — never includes the password. */
 export const ADMIN_DEMO_CREDENTIALS = {
   email: ADMIN_EMAIL_HINT,
-};
+} as const;

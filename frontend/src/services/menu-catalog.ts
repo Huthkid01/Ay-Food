@@ -1,4 +1,3 @@
-import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { slugify } from '../utils/helpers';
 import { resolveFoodImage } from '../utils/food-images';
 import type { Category, Food } from '../types';
@@ -108,6 +107,7 @@ type FetchResult =
   | { ok: false; error: string };
 
 async function fetchFromSupabase(): Promise<FetchResult> {
+  const { isSupabaseConfigured, supabase } = await import('../lib/supabase');
   if (!isSupabaseConfigured()) {
     return { ok: false, error: 'Supabase is not configured' };
   }
@@ -153,6 +153,7 @@ async function fetchFromSupabase(): Promise<FetchResult> {
  * A successful empty DB response clears the cache (no stale menu).
  */
 export async function fetchMenuCatalog(): Promise<MenuCatalog> {
+  const { isSupabaseConfigured } = await import('../lib/supabase');
   if (!isSupabaseConfigured()) {
     return emptyCatalog();
   }

@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
+import { MapPin } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useSiteContentData } from '../hooks/useSiteContent';
 import { createOrderInDatabase } from '../services/orders.service';
@@ -11,6 +12,12 @@ import { openOrderOnWhatsApp, type WhatsAppOrderDetails } from '../utils/whatsap
 import { PaymentTransferModal } from '../components/checkout/PaymentTransferModal';
 import { notifyAdminPaymentConfirmed } from '../services/payment-notify.service';
 import { useToast } from '../components/ui/Toast';
+import {
+  geolocationErrorMessage,
+  getGeolocationPermission,
+  locationBlockedHelp,
+  resolveDeliveryAddressFromGps,
+} from '../utils/delivery-location';
 
 const checkoutSchema = z
   .object({
@@ -75,11 +82,20 @@ export default function CheckoutPage() {
   const items = getFlattenedItems();
   const [draft, setDraft] = useState<PaymentDraft | null>(null);
   const [completed, setCompleted] = useState<CompletedOrder | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [mapsUrl, setMapsUrl] = useState<string | null>(null);
+  const [locationBlocked, setLocationBlocked] = useState(false);
 
   const taxable = subtotal + packFees;
   const tax = taxable * 0.075;
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<CheckoutForm>({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<CheckoutForm>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
       orderType: 'DELIVERY',
@@ -89,6 +105,36 @@ export default function CheckoutPage() {
   const orderType = watch('orderType');
   const deliveryFee = orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
   const total = taxable + tax + deliveryFee;
+
+  async function handleUseCurrentLocation() {
+    setLocating(true);
+    setLocationBlocked(false);
+    try {
+      const permission = await getGeolocationPermission();
+      if (permission === 'denied') {
+        setLocationBlocked(true);
+        showToast(locationBlockedHelp(), 'error');
+        return;
+      }
+
+      // Triggers the browser Allow / Don’t allow dialog when permission is “prompt”
+      const result = await resolveDeliveryAddressFromGps();
+      setValue('deliveryAddress', result.address, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+      setMapsUrl(result.mapsUrl);
+      setLocationBlocked(false);
+      showToast('Location filled — you can edit the address if needed');
+    } catch (err) {
+      const denied =
+        err && typeof err === 'object' && 'code' in err && (err as GeolocationPositionError).code === 1;
+      if (denied) setLocationBlocked(true);
+      showToast(geolocationErrorMessage(err), 'error');
+    } finally {
+      setLocating(false);
+    }
+  }
   /** Open payment modal only — do not create the order yet. */
   function openPaymentDraft(form: CheckoutForm) {
     const snapshotItems: CartSnapshotItem[] = items.map((i) => ({
@@ -314,15 +360,46 @@ export default function CheckoutPage() {
           {orderType === 'DELIVERY' && (
             <>
               <div>
-                <label htmlFor="checkout-address" className="mb-1.5 block text-sm text-secondary">
-                  Delivery Address
-                </label>
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="checkout-address" className="block text-sm text-secondary">
+                    Delivery Address
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    disabled={locating}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-brand-gold/40 bg-brand-gold/10 px-3 py-1 text-xs font-semibold text-brand-gold transition hover:bg-brand-gold/20 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <MapPin size={13} />
+                    {locating ? 'Getting location…' : 'Use current location'}
+                  </button>
+                </div>
                 <textarea
                   id="checkout-address"
                   {...register('deliveryAddress')}
-                  rows={2}
+                  rows={3}
+                  placeholder="Street, landmark, area — or tap Use current location"
                   className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
                 />
+                {mapsUrl && (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-gold hover:underline"
+                  >
+                    <MapPin size={12} />
+                    Open pin in Google Maps
+                  </a>
+                )}
+                {locationBlocked && (
+                  <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100/90">
+                    Location access is blocked for this site. Open your browser site settings → set
+                    Location to <span className="font-semibold">Allow</span>, then tap{' '}
+                    <span className="font-semibold">Use current location</span> again. You can also
+                    type your address below.
+                  </p>
+                )}
                 {errors.deliveryAddress && (
                   <p className="mt-1 text-xs text-red-400">{errors.deliveryAddress.message}</p>
                 )}
@@ -331,6 +408,7 @@ export default function CheckoutPage() {
                 <label className="mb-1.5 block text-sm text-secondary">Delivery Instructions</label>
                 <input
                   {...register('deliveryInstructions')}
+                  placeholder="Gate color, floor, call on arrival…"
                   className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
                 />
               </div>

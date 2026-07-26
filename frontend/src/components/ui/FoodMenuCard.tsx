@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Clock, Minus, Plus, Star } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Minus, Plus, Star } from 'lucide-react';
 import { FoodImage } from './FoodImage';
+import { FoodImageLightbox, FoodImageZoomHint } from './FoodImageLightbox';
 import { formatMenuPrice } from '../../data/nigerian-menu';
 import { formatCurrency } from '../../utils/helpers';
 import { resolveFoodImage } from '../../utils/food-images';
@@ -15,6 +16,8 @@ type Props = {
   addLabelMore?: string;
   showCategory?: boolean;
   showDescription?: boolean;
+  /** Eager-load image for above-the-fold cards */
+  priority?: boolean;
 };
 
 export function FoodMenuCard({
@@ -26,23 +29,32 @@ export function FoodMenuCard({
   addLabelMore = 'Add Another',
   showCategory = false,
   showDescription = false,
+  priority = false,
 }: Props) {
   const [portionId, setPortionId] = useState(food.portions[0]?.id ?? '');
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const closeViewer = useCallback(() => setViewerOpen(false), []);
   const selected = food.portions.find((p) => p.id === portionId) ?? food.portions[0];
   const multi = food.portions.length > 1;
   const quantity = selected ? getQuantity(selected.id) : 0;
   const priceLabel = selected
     ? formatCurrency(selected.price)
     : formatMenuPrice(food.portions);
-  const prep = food.prepTimeMinutes || 25;
+  const imageSrc = resolveFoodImage(food);
 
   return (
     <article className="food-card group flex min-w-0 flex-col">
-      <div className="relative aspect-[4/3] overflow-hidden">
+      <button
+        type="button"
+        className="relative aspect-[4/3] cursor-zoom-in overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
+        onClick={() => setViewerOpen(true)}
+        aria-label={`View ${food.name} image`}
+      >
         <FoodImage
-          src={resolveFoodImage(food)}
+          src={imageSrc}
           alt={food.name}
-          className="food-card-image h-full w-full object-cover transition-transform duration-500 ease-out"
+          priority={priority}
+          className="food-card-image h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
         {food.isPopular && (
@@ -50,11 +62,15 @@ export function FoodMenuCard({
             <Star size={11} className="fill-white" /> Popular
           </span>
         )}
-        <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
-          <Clock size={11} className="text-brand-gold" />
-          {prep} min
-        </span>
-      </div>
+        <FoodImageZoomHint />
+      </button>
+
+      <FoodImageLightbox
+        open={viewerOpen}
+        onClose={closeViewer}
+        src={imageSrc}
+        alt={food.name}
+      />
 
       <div className="flex flex-1 flex-col p-4 sm:p-5">
         {showCategory && (

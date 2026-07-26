@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { siteSettingsService } from '../../services/site-visit.service';
+import { siteSettingsService } from '../../services/site-settings.service';
 import { useSiteContentData } from '../../hooks/useSiteContent';
 import { brandDisplayName } from '../../data/default-site-content';
 

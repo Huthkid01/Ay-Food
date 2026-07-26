@@ -1,9 +1,4 @@
-import {
-  HERO_IMAGE,
-  HERO_INTERIOR_1,
-  HERO_INTERIOR_2,
-  type HeroSlide,
-} from '../utils/food-images';
+import { type HeroSlide } from '../utils/food-images';
 
 export type SiteFeature = {
   title: string;
@@ -133,36 +128,36 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
   },
   heroSlides: [
     {
-      image: HERO_IMAGE,
-      tagline: 'Ogijo · Fresh daily',
-      title: 'Fresh Nigerian Meals,',
-      highlight: 'Delivered Hot.',
+      image: '/assets/hero-restaurant.webp',
+      tagline: 'Real restaurant · Ogijo',
+      title: 'Authentic Nigerian Dining',
+      highlight: 'in Ogijo',
       description:
-        'Order authentic Nigerian dishes prepared fresh daily from our Ogijo kitchen.',
+        'Visit our beautiful restaurant or order fresh Nigerian meals online for fast delivery and pickup.',
       primaryCta: { label: 'Order Now', to: '/menu' },
       secondaryCta: { label: 'Browse Menu', to: '/menu' },
-      imagePosition: '70% center',
+      imagePosition: 'center 30%',
     },
     {
-      image: HERO_INTERIOR_1,
-      tagline: 'Made to order',
-      title: 'Build Your Perfect',
-      highlight: 'Meal Pack',
+      image: '/assets/hero-signature.webp',
+      tagline: 'Signature kitchen',
+      title: 'Freshly Cooked.',
+      highlight: 'Delivered Hot.',
       description:
-        'Choose swallow, soups, proteins, and sides — customized to your taste and delivered hot.',
-      primaryCta: { label: 'Order Now', to: '/build' },
-      secondaryCta: { label: 'Browse Menu', to: '/menu' },
+        'Every meal is prepared fresh using quality ingredients and authentic Nigerian recipes.',
+      primaryCta: { label: 'Order Now', to: '/menu' },
+      secondaryCta: { label: 'Build Your Pack', to: '/build' },
       imagePosition: 'center',
     },
     {
-      image: HERO_INTERIOR_2,
-      tagline: 'Ogijo · Ikorodu · Lagos',
-      title: 'Hot Meals,',
-      highlight: 'To Your Door',
+      image: '/assets/hero-variety-alt.webp',
+      tagline: 'Full menu',
+      title: 'Something Delicious',
+      highlight: 'For Everyone',
       description:
-        'Same kitchen, same taste — order online for delivery or pickup. No account needed.',
-      primaryCta: { label: 'Order Now', to: '/menu' },
-      secondaryCta: { label: 'Browse Menu', to: '/menu' },
+        'Browse our full menu and discover authentic Nigerian meals made fresh every day.',
+      primaryCta: { label: 'Explore Menu', to: '/menu' },
+      secondaryCta: { label: 'Order Now', to: '/menu' },
       imagePosition: 'center',
     },
   ],

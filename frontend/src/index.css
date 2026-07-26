@@ -296,3 +296,146 @@
 .admin-shell[data-admin-theme='light'] .bg-black\/70 {
   background-color: rgb(15 23 42 / 0.45);
 }
+
+/* ─── Homepage hero story slider ─── */
+.hero-story {
+  /* Mobile: full-bleed like the original min-h-screen hero */
+  width: 100%;
+  height: 100svh;
+  min-height: 100vh;
+}
+
+@media (min-width: 1024px) {
+  .hero-story {
+    height: 90vh;
+    min-height: 40rem;
+  }
+}
+
+.hero-overlay-trust {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.58) 0%,
+    rgba(0, 0, 0, 0.72) 100%
+  );
+}
+
+.hero-overlay-appetite {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.48) 0%,
+    rgba(0, 0, 0, 0.68) 100%
+  );
+}
+
+.hero-overlay-variety {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.78) 100%
+  );
+}
+
+.hero-parallax-layer {
+  transition: transform 0.45s ease-out;
+}
+
+@keyframes hero-ken-burns {
+  from {
+    transform: scale(1.04);
+  }
+  to {
+    transform: scale(1.12);
+  }
+}
+
+.hero-ken-burns {
+  animation: hero-ken-burns 7s ease-out forwards;
+  transform-origin: center center;
+}
+
+@keyframes hero-float-food {
+  0%,
+  100% {
+    transform: scale(1.06) translateY(0);
+  }
+  50% {
+    transform: scale(1.08) translateY(-10px);
+  }
+}
+
+.hero-float-food {
+  animation: hero-float-food 5.5s ease-in-out infinite;
+}
+
+@keyframes hero-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-copy-item {
+  animation: hero-copy-in 0.65s ease-out both;
+}
+
+.hero-copy-item:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.hero-copy-item:nth-child(2) {
+  animation-delay: 0.14s;
+}
+.hero-copy-item:nth-child(3) {
+  animation-delay: 0.22s;
+}
+
+.hero-copy-ctas {
+  animation: hero-copy-in 0.7s ease-out 0.32s both;
+}
+
+.hero-btn-primary {
+  @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-brand-gold px-8 py-3.5 font-semibold text-white transition-all duration-300;
+  box-shadow: 0 12px 28px rgb(249 115 22 / 0.35);
+}
+
+.hero-btn-primary:hover {
+  @apply bg-brand-gold-dark;
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 16px 36px rgb(249 115 22 / 0.5);
+}
+
+.hero-btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-white/70 bg-transparent px-8 py-3.5 font-semibold text-white transition-all duration-300;
+}
+
+.hero-btn-secondary:hover {
+  @apply border-brand-gold text-brand-gold;
+  transform: translateY(-2px);
+}
+
+@keyframes hero-progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-ken-burns,
+  .hero-float-food,
+  .hero-copy-item,
+  .hero-copy-ctas {
+    animation: none !important;
+  }
+
+  .hero-parallax-layer {
+    transform: none !important;
+    transition: none !important;
+  }
+}

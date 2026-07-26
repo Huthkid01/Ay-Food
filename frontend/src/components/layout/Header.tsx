@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { ShoppingBag, Menu, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useCart } from '../../contexts/CartContext';
 import { useSiteContentData } from '../../hooks/useSiteContent';
 import { BrandLogo } from '../ui/BrandLogo';
@@ -37,7 +36,7 @@ const mobileNavLinks = [
 ];
 
 function BrandMark({ className }: { className?: string }) {
-  return <BrandLogo className={className} size="sm" tone="dark" />;
+  return <BrandLogo className={className} size="md" tone="dark" />;
 }
 
 function NavLink({
@@ -104,78 +103,66 @@ export function Header() {
   }, [mobileOpen]);
 
   const drawer =
-    typeof document !== 'undefined'
+    typeof document !== 'undefined' && mobileOpen
       ? createPortal(
-          <AnimatePresence>
-            {mobileOpen && (
-              <div
-                className="fixed inset-0 z-[200] lg:hidden"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Navigation menu"
-                data-testid="mobile-nav-drawer"
-              >
-                <motion.button
+          <div
+            className="fixed inset-0 z-[200] lg:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
+            data-testid="mobile-nav-drawer"
+          >
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="absolute inset-0 bg-black/70 transition-opacity"
+              onClick={() => setMobileOpen(false)}
+            />
+            <nav
+              className="absolute inset-y-0 right-0 flex w-[min(100%,20rem)] translate-x-0 flex-col bg-[#111111] shadow-2xl transition-transform duration-300 ease-out"
+              style={{ borderLeft: '1px solid rgba(255,255,255,0.08)' }}
+              data-testid="mobile-nav-panel"
+            >
+              <div className="flex items-center justify-between border-b border-brand-subtle px-4 py-4">
+                <BrandMark className="text-xl" />
+                <button
                   type="button"
-                  aria-label="Close menu"
-                  className="absolute inset-0 bg-black/70"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
+                  className="rounded-full p-2 text-white/70 transition hover:bg-white/10 hover:text-brand-gold"
                   onClick={() => setMobileOpen(false)}
-                />
-                <motion.nav
-                  className="absolute inset-y-0 right-0 flex w-[min(100%,20rem)] flex-col bg-[#111111] shadow-2xl"
-                  style={{ borderLeft: '1px solid rgba(255,255,255,0.08)' }}
-                  initial={{ x: '100%' }}
-                  animate={{ x: 0 }}
-                  exit={{ x: '100%' }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-                  data-testid="mobile-nav-panel"
+                  aria-label="Close menu"
+                  data-testid="mobile-nav-close"
                 >
-                  <div className="flex items-center justify-between border-b border-brand-subtle px-4 py-4">
-                    <BrandMark className="text-xl" />
-                    <button
-                      type="button"
-                      className="rounded-full p-2 text-white/70 transition hover:bg-white/10 hover:text-brand-gold"
-                      onClick={() => setMobileOpen(false)}
-                      aria-label="Close menu"
-                      data-testid="mobile-nav-close"
-                    >
-                      <X size={22} />
-                    </button>
-                  </div>
-                  <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
-                    {mobileNavLinks.map((link) => (
-                      <Link
-                        key={link.to}
-                        to={link.to}
-                        data-testid={`mobile-nav-${link.to === '/' ? 'home' : link.to.slice(1)}`}
-                        className={cn(
-                          'rounded-2xl px-4 py-3.5 text-base font-medium transition',
-                          location.pathname === link.to
-                            ? 'bg-brand-gold/15 text-brand-gold'
-                            : 'text-white hover:bg-white/5 hover:text-brand-gold',
-                        )}
-                      >
-                        {link.label}
-                      </Link>
-                    ))}
-                  </div>
-                  <div className="border-t border-brand-subtle p-4">
-                    <Link
-                      to="/menu"
-                      className="btn-primary btn-ripple w-full py-3 text-sm"
-                      onClick={() => setMobileOpen(false)}
-                    >
-                      Order Now
-                    </Link>
-                  </div>
-                </motion.nav>
+                  <X size={22} />
+                </button>
               </div>
-            )}
-          </AnimatePresence>,
+              <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
+                {mobileNavLinks.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    data-testid={`mobile-nav-${link.to === '/' ? 'home' : link.to.slice(1)}`}
+                    className={cn(
+                      'rounded-2xl px-4 py-3.5 text-base font-medium transition',
+                      location.pathname === link.to
+                        ? 'bg-brand-gold/15 text-brand-gold'
+                        : 'text-white hover:bg-white/5 hover:text-brand-gold',
+                    )}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+              <div className="border-t border-brand-subtle p-4">
+                <Link
+                  to="/menu"
+                  className="btn-primary btn-ripple w-full py-3 text-sm"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  Order Now
+                </Link>
+              </div>
+            </nav>
+          </div>,
           document.body,
         )
       : null;
@@ -219,20 +206,11 @@ export function Header() {
             aria-label="Cart"
           >
             <ShoppingBag size={18} className="xl:h-5 xl:w-5" />
-            <AnimatePresence>
-              {itemCount > 0 && (
-                <motion.span
-                  key={itemCount}
-                  initial={{ scale: 0.6, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.6, opacity: 0 }}
-                  className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold text-white"
-                >
-                  {itemCount > 99 ? '99+' : itemCount}
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </Link>
+            {itemCount > 0 ? (
+              <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[10px] font-bold text-white">
+                {itemCount > 99 ? '99+' : itemCount}
+              </span>
+            ) : null}          </Link>
         </nav>
 
         <div className="flex items-center gap-1 lg:hidden">

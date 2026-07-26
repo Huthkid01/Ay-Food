@@ -8,12 +8,14 @@
   </defs>
   <rect width="128" height="128" rx="32" fill="url(#markOrange)"/>
   <rect x="14" y="14" width="100" height="100" rx="24" fill="#111111" opacity="0.16"/>
+  <!-- Fork -->
   <g fill="#FFFFFF">
     <rect x="34" y="32" width="8" height="22" rx="2"/>
     <rect x="46" y="32" width="8" height="22" rx="2"/>
     <rect x="58" y="32" width="8" height="22" rx="2"/>
     <path d="M34 54h32c0 8.5-6 14-12 15.8V100c0 3.3-2.7 6-6 6h-2c-3.3 0-6-2.7-6-6V69.8C37.5 68 34 62.5 34 54Z"/>
   </g>
+  <!-- Knife -->
   <g fill="#FFFFFF">
     <path d="M86 34c12 14 12 32 3 48-1.7 3.2-6.8 2.9-7.8-.5C76.2 66 78 52 86.8 38c1.1-1.8 3.7-2 5.2-.8Z"/>
     <rect x="80" y="80" width="9" height="26" rx="3"/>
