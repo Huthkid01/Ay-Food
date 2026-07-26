@@ -155,9 +155,12 @@ export default function TrackOrderPage() {
                   </div>
                   <div>
                     <p className={isComplete ? 'font-medium' : 'text-white/40'}>{step.label}</p>
-                    {isCurrent && (
+                    {isCurrent && step.key !== 'DELIVERED' ? (
                       <p className="animate-pulse text-xs text-brand-gold">In progress...</p>
-                    )}
+                    ) : null}
+                    {isCurrent && step.key === 'DELIVERED' ? (
+                      <p className="text-xs text-brand-gold">Completed</p>
+                    ) : null}
                   </div>
                 </div>
               );
