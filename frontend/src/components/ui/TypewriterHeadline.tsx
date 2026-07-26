@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { cn } from '../../utils/helpers';
 
+export type TypewriterSegment = {
+  text: string;
+  /** Orange brand accent */
+  accent?: boolean;
+  /** Start this segment on a new line */
+  breakBefore?: boolean;
+};
+
 type Props = {
-  title: string;
-  highlight?: string;
+  segments: TypewriterSegment[];
   className?: string;
   /** ms per character */
   speed?: number;
@@ -14,21 +21,37 @@ type Props = {
 };
 
 /**
- * Typewriter (typing) effect for hero headlines.
- * Re-runs when title/highlight change (carousel slides).
+ * Typewriter effect for hero headlines (supports multi-line + orange accents).
  */
 export function TypewriterHeadline({
-  title,
-  highlight,
+  segments,
   className,
-  speed = 40,
-  startDelay = 250,
+  speed = 38,
+  startDelay = 200,
   onComplete,
 }: Props) {
-  const whitePart = title.trimEnd();
-  const orangePart = (highlight ?? '').trim();
-  const total = whitePart.length + orangePart.length;
-  const fullLabel = orangePart ? `${whitePart} ${orangePart}` : whitePart;
+  const parts = useMemo(
+    () =>
+      segments
+        .map((s) => ({ ...s, text: s.text }))
+        .filter((s) => s.text.length > 0),
+    [segments],
+  );
+
+  const total = useMemo(
+    () => parts.reduce((sum, s) => sum + s.text.length, 0),
+    [parts],
+  );
+
+  const fullLabel = useMemo(
+    () =>
+      parts
+        .map((s) => s.text)
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    [parts],
+  );
 
   const [count, setCount] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -73,36 +96,36 @@ export function TypewriterHeadline({
       window.clearTimeout(startId);
       window.clearInterval(intervalId);
     };
-  }, [whitePart, orangePart, total, speed, startDelay, reduceMotion, onComplete]);
+  }, [total, speed, startDelay, reduceMotion, onComplete, fullLabel]);
 
-  const whiteTyped = whitePart.slice(0, Math.min(count, whitePart.length));
-  const orangeTyped =
-    count > whitePart.length
-      ? orangePart.slice(0, count - whitePart.length)
-      : '';
-  const showOrangeBlock = Boolean(orangePart) && count > whitePart.length;
+  let remaining = count;
+  const rendered = parts.map((part, index) => {
+    const take = Math.max(0, Math.min(part.text.length, remaining));
+    remaining -= take;
+    const typed = part.text.slice(0, take);
+    if (!typed) return null;
+    return (
+      <span key={index}>
+        {part.breakBefore ? <br /> : null}
+        <span className={part.accent ? 'text-brand-gold' : undefined}>{typed}</span>
+      </span>
+    );
+  });
+
   const done = count >= total;
 
   return (
     <h1 className={cn(className)} aria-label={fullLabel}>
       <span aria-hidden="true">
-        {whiteTyped}
-        {showOrangeBlock ? (
-          <>
-            <br className="hidden sm:block" />
-            <span className="sm:hidden"> </span>
-            <span className="text-brand-gold">{orangeTyped}</span>
-          </>
-        ) : null}
+        {rendered}
         {!reduceMotion ? (
           <span
             className={cn(
-              'ml-1 inline font-semibold tracking-widest text-brand-gold',
+              'ml-0.5 inline font-semibold text-brand-gold',
               done && 'animate-pulse',
             )}
-            aria-hidden
           >
-            ...
+            .
           </span>
         ) : null}
       </span>

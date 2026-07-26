@@ -11,8 +11,14 @@ import {
 } from 'lucide-react';
 import { buildUnsplashUrl } from '../../utils/food-images';
 import { cn } from '../../utils/helpers';
+import {
+  TypewriterHeadline,
+  type TypewriterSegment,
+} from '../ui/TypewriterHeadline';
 
-const AUTO_MS = 6000;
+const HOLD_AFTER_TYPE_MS = 3200;
+const TYPE_SPEED = 38;
+const TYPE_START_DELAY = 220;
 const SWIPE_THRESHOLD = 48;
 
 type StorySlide = {
@@ -109,25 +115,19 @@ function isOpenNow() {
   return hour >= 9 && hour < 22;
 }
 
-function Headline({ slide }: { slide: StorySlide }) {
-  const line2IsAccent = slide.id === 'signature';
-
-  return (
-    <h1 className="font-display text-[2.15rem] font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-[3.5rem] xl:text-[3.75rem]">
-      <span className="block">
-        {slide.titleBefore}
-        {slide.titleAccent ? (
-          <span className="text-brand-gold">{slide.titleAccent}</span>
-        ) : null}
-        {slide.titleAfter ?? null}
-      </span>
-      {slide.titleLine2 ? (
-        <span className={cn('mt-1 block', line2IsAccent && 'text-brand-gold')}>
-          {slide.titleLine2}
-        </span>
-      ) : null}
-    </h1>
-  );
+function segmentsForSlide(slide: StorySlide): TypewriterSegment[] {
+  const segments: TypewriterSegment[] = [];
+  if (slide.titleBefore) segments.push({ text: slide.titleBefore });
+  if (slide.titleAccent) segments.push({ text: slide.titleAccent, accent: true });
+  if (slide.titleAfter) segments.push({ text: slide.titleAfter });
+  if (slide.titleLine2) {
+    segments.push({
+      text: slide.titleLine2,
+      breakBefore: true,
+      accent: slide.id === 'signature',
+    });
+  }
+  return segments;
 }
 
 function VarietyCollage({ active }: { active: boolean }) {
@@ -158,27 +158,41 @@ export function HeroCarousel() {
   const slides = STORY_SLIDES;
   const count = slides.length;
   const [current, setCurrent] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const parallaxRef = useRef<HTMLDivElement>(null);
   const open = isOpenNow();
+  const currentRef = useRef(0);
+  currentRef.current = current;
+  const [holdForSlide, setHoldForSlide] = useState<number | null>(null);
+  const [typingDone, setTypingDone] = useState(false);
 
   const goTo = useCallback(
     (index: number) => {
+      setHoldForSlide(null);
+      setTypingDone(false);
       setCurrent(((index % count) + count) % count);
     },
     [count],
   );
 
   const next = useCallback(() => {
+    setHoldForSlide(null);
+    setTypingDone(false);
     setCurrent((c) => (c + 1) % count);
   }, [count]);
 
   const prev = useCallback(() => {
+    setHoldForSlide(null);
+    setTypingDone(false);
     setCurrent((c) => (c - 1 + count) % count);
   }, [count]);
+
+  const onTypingComplete = useCallback(() => {
+    setTypingDone(true);
+    setHoldForSlide(currentRef.current);
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -188,12 +202,17 @@ export function HeroCarousel() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  /** Autoplay — 6s, pause on hover / reduced motion */
+  /** Advance after typing finishes (+ hold so the line can be read) */
   useEffect(() => {
-    if (isPaused || reduceMotion || count <= 1) return;
-    const timer = window.setTimeout(() => next(), AUTO_MS);
+    if (holdForSlide === null) return;
+    if (holdForSlide !== current) {
+      setHoldForSlide(null);
+      return;
+    }
+    if (reduceMotion || count <= 1) return;
+    const timer = window.setTimeout(() => next(), HOLD_AFTER_TYPE_MS);
     return () => window.clearTimeout(timer);
-  }, [current, isPaused, reduceMotion, count, next]);
+  }, [holdForSlide, current, reduceMotion, count, next]);
 
   /** Keyboard */
   useEffect(() => {
@@ -271,8 +290,6 @@ export function HeroCarousel() {
     <section
       ref={sectionRef}
       className="hero-story relative flex w-full items-center overflow-hidden bg-brand-dark"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       aria-roledescription="carousel"
@@ -373,8 +390,15 @@ export function HeroCarousel() {
             </p>
           )}
 
-          <div className="hero-copy-item mb-5">
-            <Headline slide={slide} />
+          <div className="hero-copy-item mb-5 min-h-[2.6em] sm:min-h-[2.4em]">
+            <TypewriterHeadline
+              key={`type-${slide.id}-${current}`}
+              segments={segmentsForSlide(slide)}
+              speed={TYPE_SPEED}
+              startDelay={TYPE_START_DELAY}
+              onComplete={onTypingComplete}
+              className="font-display text-[2.15rem] font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-[3.5rem] xl:text-[3.75rem]"
+            />
           </div>
 
           <p className="hero-copy-item mb-9 max-w-xl font-sans text-base leading-relaxed text-white/80 sm:text-lg">
@@ -419,14 +443,18 @@ export function HeroCarousel() {
               )}
               aria-label={`Go to slide ${index + 1}: ${s.id}`}
             >
-              {index === current && !isPaused && !reduceMotion ? (
+              {index === current && typingDone && !reduceMotion ? (
                 <span
-                  key={`progress-${current}`}
+                  key={`progress-${current}-${holdForSlide}`}
                   className="absolute inset-y-0 left-0 rounded-full bg-brand-gold"
-                  style={{ animation: `hero-progress ${AUTO_MS}ms linear forwards` }}
+                  style={{
+                    animation: `hero-progress ${HOLD_AFTER_TYPE_MS}ms linear forwards`,
+                  }}
                 />
-              ) : index === current ? (
+              ) : index === current && typingDone ? (
                 <span className="absolute inset-0 rounded-full bg-brand-gold" />
+              ) : index === current ? (
+                <span className="absolute inset-0 w-1/5 rounded-full bg-brand-gold/70" />
               ) : null}
             </button>
           ))}
