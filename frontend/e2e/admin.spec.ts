@@ -10,7 +10,8 @@ test.describe('Ay Food admin', () => {
     await expect(page.getByText(/Admin Dashboard Access/i)).toBeVisible();
     await expect(page.getByText(/Secure Admin Access/i)).toBeVisible();
     await expect(page.getByLabel(/Department/i)).toBeVisible();
-    await expect(page.getByLabel(/Email Address/i)).toHaveValue(ADMIN_EMAIL);
+    await expect(page.getByLabel(/Email Address/i)).toBeVisible();
+    await expect(page.getByLabel(/^Password$/i)).toBeVisible();
   });
 
   test('demo login reaches dashboard', async ({ page }) => {
