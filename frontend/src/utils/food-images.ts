@@ -78,8 +78,6 @@ const HERO_MOBILE: Record<string, string> = {
   [HERO_IMAGE]: '/assets/hero-restaurant-768.webp',
   [HERO_INTERIOR_1]: '/assets/hero-signature-768.webp',
   [HERO_INTERIOR_2]: '/assets/hero-variety-alt.webp',
-  '/assets/hero-restaurant.webp': '/assets/hero-restaurant-768.webp',
-  '/assets/hero-signature.webp': '/assets/hero-signature-768.webp',
   '/assets/hero.webp': '/assets/hero-restaurant-768.webp',
   '/assets/hero.png': '/assets/hero-restaurant-768.webp',
   '/assets/hero-interior-1.webp': '/assets/hero-signature-768.webp',
