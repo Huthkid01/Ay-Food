@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -76,6 +77,7 @@ function nextOrderNumber() {
 }
 
 export default function CheckoutPage() {
+  const navigate = useNavigate();
   const { getFlattenedItems, subtotal, packFees, activePacks, clearCart } = useCart();
   const { restaurant } = useSiteContentData();
   const { showToast } = useToast();
@@ -252,6 +254,13 @@ export default function CheckoutPage() {
     openOrderOnWhatsApp(restaurant.whatsapp, completed.whatsapp);
   }
 
+  function handleDismissCompleted() {
+    if (!completed) return;
+    const orderNumber = completed.orderNumber;
+    setCompleted(null);
+    navigate(`/track?order=${encodeURIComponent(orderNumber)}`);
+  }
+
   if (completed) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
@@ -273,6 +282,7 @@ export default function CheckoutPage() {
           }}
           onConfirmPaid={() => undefined}
           onContinueWhatsApp={handleContinueWhatsApp}
+          onClose={handleDismissCompleted}
         />
       </div>
     );

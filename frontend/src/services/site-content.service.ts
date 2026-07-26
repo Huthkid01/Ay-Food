@@ -11,9 +11,9 @@ export { DEFAULT_SITE_CONTENT, brandDisplayName } from '../data/default-site-con
 const LOCAL_CONTENT_KEY = 'ay-food-site-content';
 const CONTENT_EVENT = 'ay-food-site-content-changed';
 const CONTENT_CHANNEL = 'ay-food-site-content';
-/** Bump to push official bank + WhatsApp into existing local drafts once. */
+/** Bump to push official bank + WhatsApp + brand into existing local drafts once. */
 const CONTACT_SEED_KEY = 'ay-food-contact-seed';
-const CONTACT_SEED_VERSION = 'opay-wa-08173097933';
+const CONTACT_SEED_VERSION = 'brand-ay-food-palace-v1';
 
 export const SITE_CONTENT_KEY = ['site-content'] as const;
 
@@ -22,10 +22,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function mergeHeroSlide(base: HeroSlide, patch: unknown): HeroSlide {
-  if (!isRecord(patch)) return base;
+  if (!isRecord(patch)) return normalizeHeroBrandTitle(base);
   const primary = isRecord(patch.primaryCta) ? patch.primaryCta : {};
   const secondary = isRecord(patch.secondaryCta) ? patch.secondaryCta : {};
-  return {
+  return normalizeHeroBrandTitle({
     image:
       typeof patch.image === 'string' && patch.image
         ? normalizeHeroImage(patch.image)
@@ -47,7 +47,42 @@ function mergeHeroSlide(base: HeroSlide, patch: unknown): HeroSlide {
     imagePosition:
       typeof patch.imagePosition === 'string' ? patch.imagePosition : base.imagePosition,
     active: typeof patch.active === 'boolean' ? patch.active : (base.active ?? true),
-  };
+  });
+}
+
+/** Upgrade legacy “Ay Food” hero titles to “Ay Food Palace”. */
+function normalizeHeroBrandTitle(slide: HeroSlide): HeroSlide {
+  const combined = [slide.title, slide.highlight]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/[.\s]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (combined === 'ay food' || combined === 'ayfood' || combined === 'ay') {
+    return { ...slide, title: 'Ay Food Palace', highlight: '' };
+  }
+  return slide;
+}
+
+function normalizeRestaurantBrand(
+  restaurant: SiteContent['restaurant'],
+): SiteContent['restaurant'] {
+  const prefix = restaurant.brandPrefix.trim();
+  const accent = restaurant.brandAccent.trim();
+  const combined = `${prefix} ${accent}`.replace(/\s+/g, ' ').trim();
+  if (
+    (prefix === 'Ay' && accent === 'Food') ||
+    combined === 'Ay Food' ||
+    combined === 'Ay'
+  ) {
+    return {
+      ...restaurant,
+      brandPrefix: DEFAULT_SITE_CONTENT.restaurant.brandPrefix,
+      brandAccent: DEFAULT_SITE_CONTENT.restaurant.brandAccent,
+    };
+  }
+  return restaurant;
 }
 
 /** Deep-merge saved content onto defaults so new fields always exist. */
@@ -88,12 +123,12 @@ export function normalizeSiteContent(raw: unknown): SiteContent {
       : DEFAULT_SITE_CONTENT.heroSlides;
 
   return {
-    restaurant: {
+    restaurant: normalizeRestaurantBrand({
       ...DEFAULT_SITE_CONTENT.restaurant,
       ...Object.fromEntries(
         Object.entries(restaurantIn).filter(([, v]) => typeof v === 'string')
       ),
-    },
+    }),
     heroSlides,
     home: {
       ...DEFAULT_SITE_CONTENT.home,
@@ -274,14 +309,17 @@ function applyOfficialContactSeed(content: SiteContent): SiteContent {
     }
     const next: SiteContent = {
       ...content,
-      restaurant: {
+      restaurant: normalizeRestaurantBrand({
         ...content.restaurant,
+        brandPrefix: DEFAULT_SITE_CONTENT.restaurant.brandPrefix,
+        brandAccent: DEFAULT_SITE_CONTENT.restaurant.brandAccent,
         phone: DEFAULT_SITE_CONTENT.restaurant.phone,
         whatsapp: DEFAULT_SITE_CONTENT.restaurant.whatsapp,
         bankName: DEFAULT_SITE_CONTENT.restaurant.bankName,
         accountName: DEFAULT_SITE_CONTENT.restaurant.accountName,
         accountNumber: DEFAULT_SITE_CONTENT.restaurant.accountNumber,
-      },
+      }),
+      heroSlides: content.heroSlides.map(normalizeHeroBrandTitle),
       support: {
         ...content.support,
         channels: content.support.channels.map((ch) => {

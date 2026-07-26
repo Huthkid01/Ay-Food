@@ -42,7 +42,7 @@ export function extractWhatsAppPhone(whatsappUrl: string, fallback = '2348173097
  */
 export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
   const lines: string[] = [
-    `Hi Ay Food! 👋`,
+    `Hi Ay Food Palace! 👋`,
     `I just placed an order (${order.orderNumber}).`,
     '',
   ];

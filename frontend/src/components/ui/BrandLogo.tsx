@@ -1,4 +1,5 @@
 import { useSiteContentData } from '../../hooks/useSiteContent';
+import { brandDisplayName } from '../../data/default-site-content';
 import { cn } from '../../utils/helpers';
 
 const LOGO_FULL = '/assets/ay-food-palace-logo.svg';
@@ -31,7 +32,7 @@ export function BrandLogo({
 }: BrandLogoProps) {
   const { restaurant } = useSiteContentData();
   const s = sizeMap[size];
-  const alt = `${restaurant.brandPrefix} ${restaurant.brandAccent} Palace`;
+  const alt = brandDisplayName(restaurant);
 
   // Dark surfaces: use the full SVG (white + orange wordmark reads clearly)
   if (showWordmark && tone === 'dark') {

@@ -76,7 +76,7 @@ export default function HomePage() {
         <div className="site-container">
           <div className="mx-auto mb-12 max-w-2xl text-center animate-fade-up">
             <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              Why order with <span className="text-brand-gold">Ay Food</span>
+              Why order with <span className="text-brand-gold">Ay Food Palace</span>
             </h2>
             <p className="mt-3 text-secondary">
               Premium Nigerian meals, prepared fresh and delivered hot from Ogijo.

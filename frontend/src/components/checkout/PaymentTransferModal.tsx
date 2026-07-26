@@ -17,7 +17,7 @@ type Props = {
   onConfirmPaid: () => void | Promise<void>;
   /** After tracking is shown, open WhatsApp with order details. */
   onContinueWhatsApp: () => void;
-  /** Cancel payment step — go back to checkout / cart without placing the order. */
+  /** Dismiss modal — pay step cancels before placing; tracking step closes after order is placed. */
   onClose?: () => void;
   /** When true, show tracking step (order already placed). */
   confirmed?: boolean;
@@ -79,19 +79,19 @@ export function PaymentTransferModal({
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
-      // Only cancel before payment is confirmed — after that the order already exists
-      if (e.key === 'Escape' && onClose && step === 'pay' && !confirming) onClose();
+      if (e.key === 'Escape' && onClose && !confirming) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose, step, confirming]);
+  }, [open, onClose, confirming]);
 
   if (!open) return null;
 
-  const canCancel = step === 'pay' && Boolean(onClose) && !confirming;
+  const canDismiss = Boolean(onClose) && !confirming;
+  const canCancelPay = step === 'pay' && canDismiss;
 
   async function copyTracking() {
     try {
@@ -124,15 +124,15 @@ export function PaymentTransferModal({
       <button
         type="button"
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        aria-label={canCancel ? 'Cancel payment' : undefined}
-        disabled={!canCancel}
+        aria-label={canDismiss ? 'Close' : undefined}
+        disabled={!canDismiss}
         onClick={() => {
-          if (canCancel) onClose?.();
+          if (canDismiss) onClose?.();
         }}
       />
       <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-brand-dark-light shadow-2xl">
-        <div className="flex items-start justify-between border-b border-white/10 px-5 py-4">
-          <div>
+        <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+          <div className="min-w-0">
             <h2 id="payment-modal-title" className="font-display text-xl font-bold text-white">
               {step === 'pay' ? 'Make payment' : 'Payment confirmed'}
             </h2>
@@ -142,12 +142,12 @@ export function PaymentTransferModal({
                 : 'Save your tracking number to follow your order.'}
             </p>
           </div>
-          {canCancel && (
+          {canDismiss && (
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-2 text-white/50 hover:bg-white/10 hover:text-white"
-              aria-label="Cancel and edit order"
+              className="shrink-0 rounded-full p-2 text-white/50 hover:bg-white/10 hover:text-white"
+              aria-label={step === 'pay' ? 'Cancel and edit order' : 'Close'}
             >
               <X size={18} />
             </button>
@@ -184,7 +184,7 @@ export function PaymentTransferModal({
               {confirming ? 'Placing order…' : 'I have made payment'}
             </button>
 
-            {canCancel && (
+            {canCancelPay && (
               <button
                 type="button"
                 onClick={onClose}
@@ -225,6 +225,16 @@ export function PaymentTransferModal({
             >
               Continue to WhatsApp
             </button>
+
+            {canDismiss && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full rounded-full border border-white/20 py-3 text-sm font-semibold text-white/80 hover:border-brand-gold hover:text-brand-gold"
+              >
+                Skip WhatsApp — track my order
+              </button>
+            )}
           </div>
         )}
       </div>

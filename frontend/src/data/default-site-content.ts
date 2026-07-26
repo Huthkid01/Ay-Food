@@ -110,8 +110,8 @@ export type SiteContent = {
 
 export const DEFAULT_SITE_CONTENT: SiteContent = {
   restaurant: {
-    brandPrefix: 'Ay',
-    brandAccent: 'Food',
+    brandPrefix: 'Ay Food',
+    brandAccent: 'Palace',
     legalName: 'A.Y Food Mega Palace',
     tagline:
       'Build your perfect meal pack with authentic Nigerian cuisine. Located in Ogijo, Ikorodu — order online with delivery or pickup.',
@@ -280,5 +280,8 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
 };
 
 export function brandDisplayName(r: SiteRestaurant): string {
-  return `${r.brandPrefix} ${r.brandAccent}`.trim();
+  const name = `${r.brandPrefix} ${r.brandAccent}`.replace(/\s+/g, ' ').trim();
+  // Legacy CMS stored “Ay” + “Food” — always show full brand.
+  if (name === 'Ay Food' || name === 'Ay') return 'Ay Food Palace';
+  return name;
 }

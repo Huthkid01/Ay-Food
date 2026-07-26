@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useCart } from '../../contexts/CartContext';
 import { useSiteContentData } from '../../hooks/useSiteContent';
+import { brandDisplayName } from '../../data/default-site-content';
 import { BrandLogo } from '../ui/BrandLogo';
 import { cn } from '../../utils/helpers';
 
@@ -351,7 +352,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-12 border-t border-brand-subtle pt-6 text-center text-sm text-muted">
-          © {new Date().getFullYear()} {restaurant.brandPrefix} {restaurant.brandAccent}. All
+          © {new Date().getFullYear()} {brandDisplayName(restaurant)}. All
           rights reserved.
         </div>
       </div>

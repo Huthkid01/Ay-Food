@@ -27,7 +27,7 @@ export default function FormSubmitOkPage() {
       <p className="text-sm font-medium text-white">Message sent.</p>
       <p className="text-sm text-white/55">You can close this tab and return to the site.</p>
       <Link to="/" className="mt-2 text-sm text-brand-gold hover:underline">
-        Back to Ay Food
+        Back to Ay Food Palace
       </Link>
     </main>
   );
