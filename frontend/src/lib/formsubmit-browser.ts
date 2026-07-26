@@ -1,13 +1,9 @@
 /**
- * FormSubmit from the visitor’s browser (same approach as Travel & Tour).
- * Endpoint: https://formsubmit.co/{email}
- * Uses a top-level form POST in a popup — FormSubmit blocks iframes / often 403s ajax from servers.
+ * FormSubmit from the visitor’s browser via AJAX — never navigates the app tab.
+ * Docs: https://formsubmit.co/ajax-documentation
  */
 
 export type FormSubmitResult = { ok: boolean; message?: string };
-
-const DONE_PATH = '/formsubmit-ok';
-const MESSAGE_TYPE = 'formsubmit:success';
 
 /** Admin alert inbox — override with VITE_FORMSUBMIT_EMAIL if needed. */
 export function getFormSubmitRecipient(): string {
@@ -17,104 +13,52 @@ export function getFormSubmitRecipient(): string {
   );
 }
 
-/** Real FormSubmit endpoint — https://formsubmit.co/email (not /ajax/) */
-export function getFormSubmitActionUrl(): string {
+function getFormSubmitAjaxUrl(): string {
   const email = getFormSubmitRecipient();
   const accessKey = import.meta.env.VITE_FORMSUBMIT_ACCESS_KEY?.trim();
-  const base = `https://formsubmit.co/${email}`;
+  const base = `https://formsubmit.co/ajax/${email}`;
   return accessKey ? `${base}/${accessKey}` : base;
 }
 
-function activationMessage(): string {
-  return `FormSubmit is not activated yet. Submit once on the live site, then click the activation link in ${getFormSubmitRecipient()} (check spam).`;
-}
-
 /**
- * POST with a real HTML form in a popup window (top-level navigation).
- * FormSubmit blocks iframes (X-Frame-Options: sameorigin) — do not use hidden iframe.
+ * POST order/payment alert to FormSubmit without opening a popup or leaving checkout.
  */
-export function postFormSubmitBrowser(
+export async function postFormSubmitBrowser(
   fields: Record<string, string>,
-  options?: { timeoutMs?: number },
 ): Promise<FormSubmitResult> {
-  if (typeof document === 'undefined') {
-    return Promise.resolve({ ok: false, message: 'Not in browser' });
+  if (typeof fetch === 'undefined') {
+    return { ok: false, message: 'Not in browser' };
   }
 
-  const timeoutMs = options?.timeoutMs ?? 90_000;
-  const nextUrl = `${window.location.origin}${DONE_PATH}`;
-  const popupName = `formsubmit_${Date.now()}`;
+  try {
+    const res = await fetch(getFormSubmitAjaxUrl(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        ...fields,
+        _captcha: 'false',
+        _template: 'table',
+      }),
+    });
 
-  const formData: Record<string, string> = {
-    _captcha: 'false',
-    _template: 'table',
-    _url: window.location.href,
-    _next: nextUrl,
-    ...fields,
-  };
-
-  return new Promise((resolve) => {
-    let settled = false;
-    let popup: Window | null = null;
-    let timer = 0;
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = getFormSubmitActionUrl();
-    form.target = popupName;
-    form.acceptCharset = 'UTF-8';
-    form.style.display = 'none';
-
-    for (const [key, value] of Object.entries(formData)) {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = key;
-      input.value = value;
-      form.appendChild(input);
-    }
-
-    const finish = (result: FormSubmitResult) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      window.removeEventListener('message', onMessage);
-      form.remove();
-      try {
-        if (popup && !popup.closed) popup.close();
-      } catch {
-        /* ignore */
-      }
-      resolve(result);
-    };
-
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === MESSAGE_TYPE) {
-        finish({ ok: true });
-      }
-    };
-
-    window.addEventListener('message', onMessage);
-
-    popup = window.open('about:blank', popupName, 'popup=yes,width=480,height=360');
-
-    if (!popup) {
-      finish({
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return {
         ok: false,
         message:
-          'Could not open FormSubmit window. Allow popups for this site, then try again.',
-      });
-      return;
+          text.trim() ||
+          `FormSubmit returned ${res.status}. Confirm the inbox is activated for ${getFormSubmitRecipient()}.`,
+      };
     }
 
-    timer = window.setTimeout(() => {
-      finish({
-        ok: false,
-        message: `${activationMessage()} If a popup opened, complete any step there and allow popups.`,
-      });
-    }, timeoutMs);
-
-    document.body.append(form);
-    form.submit();
-  });
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      message: `Could not reach FormSubmit. Check that ${getFormSubmitRecipient()} is activated.`,
+    };
+  }
 }
