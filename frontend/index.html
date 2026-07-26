@@ -156,6 +156,27 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Tawk.to — start loading immediately (before React) -->
+    <script type="text/javascript">
+      var Tawk_API = Tawk_API || {},
+        Tawk_LoadStart = new Date();
+      Tawk_API.customStyle = {
+        visibility: {
+          desktop: { position: 'br', xOffset: 16, yOffset: 16 },
+          mobile: { position: 'br', xOffset: 12, yOffset: 12 },
+        },
+      };
+      (function () {
+        var s1 = document.createElement('script'),
+          s0 = document.getElementsByTagName('script')[0];
+        s1.id = 'tawk-to-script';
+        s1.async = true;
+        s1.src = 'https://embed.tawk.to/6a65570b15ab181d4e3c7bf2/1judto3bv';
+        s1.charset = 'UTF-8';
+        s1.setAttribute('crossorigin', '*');
+        s0.parentNode.insertBefore(s1, s0);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

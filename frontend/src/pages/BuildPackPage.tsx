@@ -17,7 +17,7 @@ export default function BuildPackPage() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     packs,
     currentPackIndex,
@@ -35,18 +35,48 @@ export default function BuildPackPage() {
   const { showToast } = useToast();
   const { buildPage } = useSiteContentData();
 
+  const editPackParam = searchParams.get('editPack');
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
+  /** Apply ?editPack= only when the URL param / pack count changes — clamp invalid indexes */
   useEffect(() => {
-    const editIndex = searchParams.get('editPack');
-    if (editIndex !== null) {
-      const index = parseInt(editIndex, 10);
-      if (!Number.isNaN(index)) selectPack(index);
+    if (editPackParam === null) return;
+    const parsed = parseInt(editPackParam, 10);
+    if (Number.isNaN(parsed)) return;
+    if (packs.length === 0) return;
+
+    const clamped = Math.min(Math.max(0, parsed), packs.length - 1);
+    if (clamped !== parsed) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('editPack', String(clamped));
+          return next;
+        },
+        { replace: true }
+      );
+      return;
     }
-  }, [searchParams, selectPack]);
+
+    selectPack(clamped);
+  }, [editPackParam, packs.length, selectPack, setSearchParams]);
+
+  function focusPack(index: number, toastMsg?: string) {
+    selectPack(index);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('editPack', String(index));
+        return next;
+      },
+      { replace: true }
+    );
+    if (toastMsg) showToast(toastMsg);
+  }
 
   const { data: catalog, isLoading } = useQuery({
     queryKey: MENU_CATALOG_KEY,
@@ -104,14 +134,12 @@ export default function BuildPackPage() {
                 role="button"
                 tabIndex={0}
                 onClick={() => {
-                  selectPack(index);
-                  showToast(`Now editing ${pack.name}`);
+                  focusPack(index, `Now editing ${pack.name}`);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    selectPack(index);
-                    showToast(`Now editing ${pack.name}`);
+                    focusPack(index, `Now editing ${pack.name}`);
                   }
                 }}
                 className={cn(
@@ -136,8 +164,7 @@ export default function BuildPackPage() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          selectPack(index);
-                          showToast(`Now editing ${pack.name}`);
+                          focusPack(index, `Now editing ${pack.name}`);
                         }}
                         className="text-xs text-white/60 hover:text-brand-gold"
                       >
@@ -149,8 +176,29 @@ export default function BuildPackPage() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          const deletingCurrent = index === currentPackIndex;
                           deletePack(index);
                           showToast(`${pack.name} deleted`);
+                          if (deletingCurrent) {
+                            const fallback = Math.max(0, index - 1);
+                            setSearchParams(
+                              (prev) => {
+                                const next = new URLSearchParams(prev);
+                                next.set('editPack', String(fallback));
+                                return next;
+                              },
+                              { replace: true }
+                            );
+                          } else if (index < currentPackIndex) {
+                            setSearchParams(
+                              (prev) => {
+                                const next = new URLSearchParams(prev);
+                                next.set('editPack', String(currentPackIndex - 1));
+                                return next;
+                              },
+                              { replace: true }
+                            );
+                          }
                         }}
                         className="text-xs text-red-400 hover:text-red-300"
                       >
@@ -228,8 +276,7 @@ export default function BuildPackPage() {
             onClick={() => {
               const nextIndex = packs.length;
               addPack();
-              selectPack(nextIndex);
-              showToast(`Pack ${nextIndex + 1} created — now editing it. Add items below.`);
+              focusPack(nextIndex, `Pack ${nextIndex + 1} created — now editing it. Add items below.`);
             }}
             className="rounded-full bg-brand-gold px-5 py-2 text-sm font-semibold text-white hover:bg-brand-gold-dark"
           >
@@ -239,8 +286,10 @@ export default function BuildPackPage() {
             <button
               type="button"
               onClick={() => {
+                const sourceName = packs[currentPackIndex]?.name ?? 'Pack';
+                const nextIndex = packs.length;
                 duplicatePack(currentPackIndex);
-                showToast(`Pack duplicated from ${packs[currentPackIndex]?.name}!`);
+                focusPack(nextIndex, `Pack duplicated from ${sourceName} — now editing Pack ${nextIndex + 1}`);
               }}
               className="rounded-full border border-white/20 px-5 py-2 text-sm hover:border-brand-gold"
             >

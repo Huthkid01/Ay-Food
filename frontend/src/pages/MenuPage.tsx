@@ -7,13 +7,18 @@ import { filterMenuFoods } from '../data/nigerian-menu';
 import { FoodMenuCard } from '../components/ui/FoodMenuCard';
 import { useSiteContentData } from '../hooks/useSiteContent';
 import { useFoodPackQuantity } from '../hooks/useFoodPackQuantity';
+import { useCart } from '../contexts/CartContext';
 import type { Food } from '../types';
 
 export default function MenuPage() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const { getQuantity, changeQuantity } = useFoodPackQuantity(0, 'Pack 1');
+  const { packs, currentPackIndex } = useCart();
+  const packIndex = packs.length === 0 ? 0 : currentPackIndex;
+  const packName =
+    packs.length === 0 ? 'Pack 1' : packs[packIndex]?.name ?? `Pack ${packIndex + 1}`;
+  const { getQuantity, changeQuantity } = useFoodPackQuantity(packIndex, packName);
   const { menuPage } = useSiteContentData();
 
   useEffect(() => {
@@ -41,7 +46,14 @@ export default function MenuPage() {
         {menuPage.title} <span className="text-gradient">{menuPage.titleHighlight}</span>
       </h1>
       <p className="mb-8 max-w-2xl text-secondary">
-        {menuPage.subtitle} · {displayedFoods.length} items from the A.Y Food Mega Palace menu
+        {menuPage.subtitle}
+        {packs.length > 0 ? (
+          <>
+            {' '}
+            · Adding to <span className="font-medium text-brand-gold">{packName}</span>
+          </>
+        ) : null}{' '}
+        · {displayedFoods.length} items from the A.Y Food Mega Palace menu
       </p>
       <div className="mb-8">
         <div className="relative w-full max-w-xl">

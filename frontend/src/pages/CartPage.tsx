@@ -18,7 +18,7 @@ export default function CartPage() {
     const newIndex = packs.length;
     addPack();
     showToast(`Pack ${newIndex + 1} created — add food items to it`);
-    navigate(`/build?editPack=${newIndex}`);
+    navigate(`/build?editPack=${newIndex}`, { replace: false });
   }
 
   if (activePacks.length === 0) {
@@ -57,18 +57,16 @@ export default function CartPage() {
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <h3 className="text-base font-semibold text-brand-gold sm:text-lg">{pack.name}</h3>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  {packIndex === 0 && (
-                    <button
-                      type="button"
-                      onClick={handleAddAnotherPack}
-                      className="inline-flex items-center gap-1 rounded-full border border-brand-gold/50 px-2.5 py-1 text-[11px] font-medium text-brand-gold transition hover:bg-brand-gold/10 sm:px-3 sm:py-1.5 sm:text-sm"
-                    >
-                      <Plus size={12} className="sm:hidden" />
-                      <Plus size={14} className="hidden sm:block" />
-                      <span className="sm:hidden">Add Pack</span>
-                      <span className="hidden sm:inline">Add Another Pack</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddAnotherPack}
+                    className="inline-flex items-center gap-1 rounded-full border border-brand-gold/50 px-2.5 py-1 text-[11px] font-medium text-brand-gold transition hover:bg-brand-gold/10 sm:px-3 sm:py-1.5 sm:text-sm"
+                  >
+                    <Plus size={12} className="sm:hidden" />
+                    <Plus size={14} className="hidden sm:block" />
+                    <span className="sm:hidden">Add Pack</span>
+                    <span className="hidden sm:inline">Add Another Pack</span>
+                  </button>
                   <Link
                     to={`/build?editPack=${packIndex}`}
                     className="text-xs text-secondary transition hover:text-brand-gold sm:text-sm"

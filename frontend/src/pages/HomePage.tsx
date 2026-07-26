@@ -13,6 +13,7 @@ import { FoodMenuCard } from '../components/ui/FoodMenuCard';
 import { fetchMenuCatalog, MENU_CATALOG_KEY } from '../services/menu-catalog';
 import { useFoodPackQuantity } from '../hooks/useFoodPackQuantity';
 import { useSiteContentData } from '../hooks/useSiteContent';
+import { useCart } from '../contexts/CartContext';
 import type { Food } from '../types';
 
 const MENU_CATEGORIES = ['swallow', 'meals', 'protein', 'sides', 'soups'];
@@ -26,7 +27,11 @@ const TRUST = [
 ];
 
 export default function HomePage() {
-  const { getQuantity, changeQuantity } = useFoodPackQuantity(0, 'Pack 1');
+  const { packs, currentPackIndex } = useCart();
+  const packIndex = packs.length === 0 ? 0 : currentPackIndex;
+  const packName =
+    packs.length === 0 ? 'Pack 1' : packs[packIndex]?.name ?? `Pack ${packIndex + 1}`;
+  const { getQuantity, changeQuantity } = useFoodPackQuantity(packIndex, packName);
   const { home } = useSiteContentData();
 
   const { data: catalog, isLoading } = useQuery({
@@ -140,19 +145,32 @@ export default function HomePage() {
       {/* Final CTA */}
       <section className="content-auto section-pad bg-brand-dark">
         <div className="site-container">
-          <div className="relative overflow-hidden rounded-[2rem] border border-brand-subtle bg-brand-card px-8 py-14 text-center sm:px-12 sm:py-16">
+          <div className="relative overflow-hidden rounded-[2rem] border border-brand-subtle px-8 py-16 text-center sm:px-12 sm:py-20">
+            <img
+              src="/assets/hero-interior-1.png"
+              alt=""
+              className="absolute inset-0 h-full w-full max-w-none object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/78 to-black/70" />
             <div
-              className="pointer-events-none absolute inset-0 opacity-60"
+              className="pointer-events-none absolute inset-0"
               style={{
                 background:
-                  'radial-gradient(ellipse 70% 80% at 50% 120%, rgb(249 115 22 / 0.18), transparent 55%)',
+                  'radial-gradient(ellipse 80% 70% at 70% 50%, rgb(249 115 22 / 0.22), transparent 55%), radial-gradient(ellipse 50% 60% at 20% 80%, rgb(107 142 35 / 0.12), transparent 50%)',
               }}
             />
             <div className="relative">
-              <h2 className="mb-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-brand-gold/90">
+                Ay Food Mega Palace
+              </p>
+              <h2 className="mb-3 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
                 {home.ctaHeading}
               </h2>
-              <p className="mx-auto mb-8 max-w-md text-secondary">{home.ctaBody}</p>
+              <p className="mx-auto mb-9 max-w-md text-base leading-relaxed text-secondary sm:text-lg">
+                {home.ctaBody}
+              </p>
               <Link to={home.ctaButtonTo} className="btn-primary btn-ripple">
                 {home.ctaButtonLabel} <ArrowRight size={18} />
               </Link>

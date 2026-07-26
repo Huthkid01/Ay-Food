@@ -13,6 +13,7 @@ import { FloatingCart } from './components/layout/FloatingCart';
 import { ScrollToTop } from './components/layout/ScrollToTop';
 import { MaintenanceGate } from './components/layout/MaintenanceGate';
 import { NotificationBanner } from './components/layout/NotificationBanner';
+import { TawkToChat } from './components/layout/TawkToChat';
 import HomePage from './pages/HomePage';
 import { AdminProtectedRoute, AdminGuestRoute } from './routes/AdminRoutes';
 
@@ -82,7 +83,12 @@ function SiteBridges() {
       !!getAdminToken() ||
       location.pathname.startsWith('/admin'),
   });
-  return <SeoManager />;
+  return (
+    <>
+      <SeoManager />
+      <TawkToChat />
+    </>
+  );
 }
 
 export default function App() {

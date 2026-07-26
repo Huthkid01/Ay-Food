@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useMemo, useState, useCallback, type ReactNode } from 'react';
 import type { CartItem, CartPack } from '../types';
 import { PACK_FEE, packItemsTotal } from '../types';
 import { generateId } from '../utils/helpers';
@@ -28,6 +28,14 @@ function calcPackIndex(packs: CartPack[], packIndex?: number): number {
   if (packs.length === 0) return 0;
   if (packIndex === undefined) return 0;
   return Math.min(Math.max(0, packIndex), packs.length - 1);
+}
+
+/** Always keep names as Pack 1, Pack 2, … in order */
+function renumberPacks(packs: CartPack[]): CartPack[] {
+  return packs.map((pack, i) => ({
+    ...pack,
+    name: `Pack ${i + 1}`,
+  }));
 }
 
 function cartReducer(state: CartState, action: CartAction): CartState {
@@ -135,33 +143,48 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     }
 
     case 'ADD_PACK': {
-      const nextNum = state.packs.length + 1;
+      const packs = renumberPacks([
+        ...state.packs,
+        { id: generateId(), name: `Pack ${state.packs.length + 1}`, items: [] },
+      ]);
       return {
-        packs: [...state.packs, { id: generateId(), name: `Pack ${nextNum}`, items: [] }],
-        currentPackIndex: state.packs.length,
+        packs,
+        currentPackIndex: packs.length - 1,
       };
     }
 
     case 'DUPLICATE_PACK': {
       const source = state.packs[action.payload];
       if (!source) return state;
-      const nextNum = state.packs.length + 1;
-      const duplicated: CartPack = {
-        id: generateId(),
-        name: `Pack ${nextNum}`,
-        items: source.items.map((item) => ({ ...item, id: generateId() })),
-      };
+      const packs = renumberPacks([
+        ...state.packs,
+        {
+          id: generateId(),
+          name: `Pack ${state.packs.length + 1}`,
+          items: source.items.map((item) => ({ ...item, id: generateId() })),
+        },
+      ]);
       return {
-        packs: [...state.packs, duplicated],
-        currentPackIndex: state.packs.length,
+        packs,
+        currentPackIndex: packs.length - 1,
       };
     }
 
     case 'DELETE_PACK': {
       if (state.packs.length <= 1) return state;
-      const packs = state.packs.filter((_, i) => i !== action.payload);
-      const currentPackIndex = Math.min(state.currentPackIndex, packs.length - 1);
-      return { packs, currentPackIndex: Math.max(0, currentPackIndex) };
+      const deletedIndex = action.payload;
+      const remaining = state.packs.filter((_, i) => i !== deletedIndex);
+      const packs = renumberPacks(remaining);
+
+      let currentPackIndex = state.currentPackIndex;
+      if (deletedIndex < currentPackIndex) {
+        currentPackIndex -= 1;
+      } else if (deletedIndex === currentPackIndex) {
+        currentPackIndex = Math.min(currentPackIndex, packs.length - 1);
+      }
+      currentPackIndex = Math.max(0, Math.min(currentPackIndex, packs.length - 1));
+
+      return { packs, currentPackIndex };
     }
 
     case 'SELECT_PACK':
@@ -172,20 +195,37 @@ function cartReducer(state: CartState, action: CartAction): CartState {
 
     case 'REMOVE_PACK_ITEM': {
       const { packId, itemId } = action.payload;
-      let packs = state.packs
-        .map((pack) =>
-          pack.id === packId
-            ? { ...pack, items: pack.items.filter((item) => item.id !== itemId) }
-            : pack
-        )
-        .filter((pack) => pack.items.length > 0 || state.packs.length === 1);
+      let packs = state.packs.map((pack) =>
+        pack.id === packId
+          ? { ...pack, items: pack.items.filter((item) => item.id !== itemId) }
+          : pack
+      );
+
+      const emptiedIndex = packs.findIndex((p) => p.id === packId);
+      const emptied = emptiedIndex >= 0 ? packs[emptiedIndex] : undefined;
+      if (emptied && emptied.items.length === 0 && packs.length > 1) {
+        packs = packs.filter((p) => p.id !== packId);
+        packs = renumberPacks(packs);
+
+        let currentPackIndex = state.currentPackIndex;
+        if (emptiedIndex < currentPackIndex) currentPackIndex -= 1;
+        else if (emptiedIndex === currentPackIndex) {
+          currentPackIndex = Math.min(currentPackIndex, packs.length - 1);
+        }
+        return {
+          packs,
+          currentPackIndex: Math.max(0, Math.min(currentPackIndex, packs.length - 1)),
+        };
+      }
 
       if (packs.length === 0) {
         return { packs: [], currentPackIndex: 0 };
       }
 
-      const currentPackIndex = Math.min(state.currentPackIndex, packs.length - 1);
-      return { packs, currentPackIndex: Math.max(0, currentPackIndex) };
+      return {
+        packs,
+        currentPackIndex: Math.min(state.currentPackIndex, packs.length - 1),
+      };
     }
 
     case 'UPDATE_PACK_ITEM_QTY': {
@@ -209,8 +249,13 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     case 'CLEAR_CART':
       return { packs: [], currentPackIndex: 0 };
 
-    case 'LOAD':
-      return action.payload;
+    case 'LOAD': {
+      const packs = renumberPacks(action.payload.packs ?? []);
+      return {
+        packs,
+        currentPackIndex: calcPackIndex(packs, action.payload.currentPackIndex),
+      };
+    }
 
     default:
       return state;
@@ -222,9 +267,10 @@ function migrateLegacyCart(raw: unknown): CartState {
   const data = raw as Record<string, unknown>;
 
   if (Array.isArray(data.packs)) {
+    const packs = renumberPacks(data.packs as CartPack[]);
     return {
-      packs: data.packs as CartPack[],
-      currentPackIndex: (data.currentPackIndex as number) ?? 0,
+      packs,
+      currentPackIndex: calcPackIndex(packs, (data.currentPackIndex as number) ?? 0),
     };
   }
 
@@ -311,19 +357,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [activePacks]
   );
 
-  const value: CartContextValue = {
-    packs: state.packs,
-    currentPackIndex: state.currentPackIndex,
-    items,
-    itemCount,
-    subtotal,
-    packFees,
-    activePacks,
-    addFood: (food, options) =>
-      dispatch({ type: 'ADD_FOOD', payload: { ...food, packIndex: options?.packIndex } }),
-    adjustFoodQuantity: (food, delta, options) =>
-      dispatch({ type: 'ADJUST_FOOD_QTY', payload: { ...food, delta, packIndex: options?.packIndex } }),
-    getFoodQuantityInPack: (foodId, foodPortionId, packIndex = 0) => {
+  const addFood = useCallback(
+    (food: FoodInput, options?: { packIndex?: number }) => {
+      dispatch({ type: 'ADD_FOOD', payload: { ...food, packIndex: options?.packIndex } });
+    },
+    []
+  );
+
+  const adjustFoodQuantity = useCallback(
+    (food: FoodInput, delta: number, options?: { packIndex?: number }) => {
+      dispatch({
+        type: 'ADJUST_FOOD_QTY',
+        payload: { ...food, delta, packIndex: options?.packIndex },
+      });
+    },
+    []
+  );
+
+  const getFoodQuantityInPack = useCallback(
+    (foodId: string, foodPortionId: string | undefined, packIndex = 0) => {
       const pack = state.packs[packIndex];
       if (!pack) return 0;
       const item = pack.items.find(
@@ -331,17 +383,77 @@ export function CartProvider({ children }: { children: ReactNode }) {
       );
       return item?.quantity ?? 0;
     },
-    addPack: () => dispatch({ type: 'ADD_PACK' }),
-    duplicatePack: (i) => dispatch({ type: 'DUPLICATE_PACK', payload: i }),
-    deletePack: (i) => dispatch({ type: 'DELETE_PACK', payload: i }),
-    selectPack: (i) => dispatch({ type: 'SELECT_PACK', payload: i }),
-    removePackItem: (packId, itemId) =>
+    [state.packs]
+  );
+
+  const addPack = useCallback(() => dispatch({ type: 'ADD_PACK' }), []);
+  const duplicatePack = useCallback(
+    (i: number) => dispatch({ type: 'DUPLICATE_PACK', payload: i }),
+    []
+  );
+  const deletePack = useCallback(
+    (i: number) => dispatch({ type: 'DELETE_PACK', payload: i }),
+    []
+  );
+  const selectPack = useCallback(
+    (i: number) => dispatch({ type: 'SELECT_PACK', payload: i }),
+    []
+  );
+  const removePackItem = useCallback(
+    (packId: string, itemId: string) =>
       dispatch({ type: 'REMOVE_PACK_ITEM', payload: { packId, itemId } }),
-    updatePackItemQuantity: (packId, itemId, quantity) =>
+    []
+  );
+  const updatePackItemQuantity = useCallback(
+    (packId: string, itemId: string, quantity: number) =>
       dispatch({ type: 'UPDATE_PACK_ITEM_QTY', payload: { packId, itemId, quantity } }),
-    getFlattenedItems: () => items,
-    clearCart: () => dispatch({ type: 'CLEAR_CART' }),
-  };
+    []
+  );
+  const clearCart = useCallback(() => dispatch({ type: 'CLEAR_CART' }), []);
+  const getFlattenedItems = useCallback(() => items, [items]);
+
+  const value: CartContextValue = useMemo(
+    () => ({
+      packs: state.packs,
+      currentPackIndex: state.currentPackIndex,
+      items,
+      itemCount,
+      subtotal,
+      packFees,
+      activePacks,
+      addFood,
+      adjustFoodQuantity,
+      getFoodQuantityInPack,
+      addPack,
+      duplicatePack,
+      deletePack,
+      selectPack,
+      removePackItem,
+      updatePackItemQuantity,
+      getFlattenedItems,
+      clearCart,
+    }),
+    [
+      state.packs,
+      state.currentPackIndex,
+      items,
+      itemCount,
+      subtotal,
+      packFees,
+      activePacks,
+      addFood,
+      adjustFoodQuantity,
+      getFoodQuantityInPack,
+      addPack,
+      duplicatePack,
+      deletePack,
+      selectPack,
+      removePackItem,
+      updatePackItemQuantity,
+      getFlattenedItems,
+      clearCart,
+    ]
+  );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
