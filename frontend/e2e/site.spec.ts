@@ -14,7 +14,7 @@ async function addAmalaToCart(page: Page) {
 async function fillCheckout(page: Page, name = 'E2E Customer') {
   await page.getByLabel(/Full Name/i).fill(name);
   await page.getByLabel(/^Phone$/i).fill('08173097933');
-  await page.getByLabel(/Email/i).fill('e2e@ayfood.ng');
+  await page.getByLabel(/Email/i).fill('e2e@ayfoodpalace.com');
   await page.getByLabel(/Delivery Address/i).fill('Ogijo, Ikorodu');
 }
 

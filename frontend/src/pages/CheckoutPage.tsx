@@ -473,11 +473,20 @@ export default function CheckoutPage() {
           </button>
         </div>
 
-        {/* Sticky mobile pay CTA */}
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-subtle bg-brand-dark/95 p-4 backdrop-blur-xl sm:hidden lg:col-span-2">
-          <button type="submit" className="btn-primary btn-ripple flex w-full items-center justify-between py-3.5">
-            <span>Continue to payment</span>
-            <span>{formatCurrency(total)}</span>
+        {/* Sticky mobile pay CTA — left, like View cart (keeps right clear for chat) */}
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 w-[min(calc(100vw-5.5rem),20rem)] sm:hidden lg:col-span-2">
+          <button
+            type="submit"
+            className="glass-panel flex w-full items-center justify-between gap-3 rounded-2xl p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)]"
+            aria-label="Continue to payment"
+          >
+            <span className="min-w-0 text-left">
+              <span className="block text-sm font-semibold text-white">Continue to payment</span>
+              <span className="block text-xs text-secondary">{formatCurrency(total)}</span>
+            </span>
+            <span className="shrink-0 rounded-xl bg-brand-gold px-3 py-2 text-xs font-bold text-white">
+              Pay
+            </span>
           </button>
         </div>
       </form>

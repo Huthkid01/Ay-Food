@@ -25,7 +25,7 @@ cd .. && npm run dev
 
 | Role     | Email               | Password    |
 |----------|---------------------|-------------|
-| Admin    | admin@ayfood.ng     | password123 |
+| Admin    | contact@ayfoodpalace.com | password123 |
 | Customer | customer@example.com | password123 |
 
 ### Demo Coupons

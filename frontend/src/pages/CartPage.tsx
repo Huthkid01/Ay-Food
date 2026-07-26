@@ -64,8 +64,7 @@ export default function CartPage() {
                   >
                     <Plus size={12} className="sm:hidden" />
                     <Plus size={14} className="hidden sm:block" />
-                    <span className="sm:hidden">Add Pack</span>
-                    <span className="hidden sm:inline">Add Another Pack</span>
+                    Add Another Pack
                   </button>
                   <Link
                     to={`/build?editPack=${packIndex}`}
@@ -160,14 +159,20 @@ export default function CartPage() {
         </button>
       </div>
 
-      {/* Sticky mobile checkout */}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-subtle bg-brand-dark/95 p-4 backdrop-blur-xl sm:hidden">
+      {/* Sticky mobile checkout — left, like View cart (keeps right clear for chat) */}
+      <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 w-[min(calc(100vw-5.5rem),20rem)] sm:hidden">
         <Link
           to="/checkout"
-          className="btn-primary btn-ripple flex w-full items-center justify-between gap-2 py-3.5"
+          className="glass-panel flex w-full items-center justify-between gap-3 rounded-2xl p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)]"
+          aria-label="Proceed to checkout"
         >
-          <span>Checkout</span>
-          <span>{formatCurrency(total)}</span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-white">Checkout</span>
+            <span className="block text-xs text-secondary">{formatCurrency(total)}</span>
+          </span>
+          <span className="shrink-0 rounded-xl bg-brand-gold px-3 py-2 text-xs font-bold text-white">
+            Continue
+          </span>
         </Link>
       </div>
     </div>

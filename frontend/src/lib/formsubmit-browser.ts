@@ -13,7 +13,7 @@ const MESSAGE_TYPE = 'formsubmit:success';
 export function getFormSubmitRecipient(): string {
   return (
     import.meta.env.VITE_FORMSUBMIT_EMAIL?.trim() ||
-    'ronniechristopher89@gmail.com'
+    'contact@ayfoodpalace.com'
   );
 }
 

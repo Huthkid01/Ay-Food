@@ -242,7 +242,7 @@ values (
   'ay-food',
   'Authentic Nigerian cuisine in Ogijo, Ikorodu, Lagos',
   '+2348000000000',
-  'hello@ayfood.ng',
+  'contact@ayfoodpalace.com',
   'Ogijo, Ikorodu',
   'Lagos'
 );

@@ -144,7 +144,7 @@ async function main() {
       logo: HERO_IMAGE,
       coverImage: HERO_IMAGE,
       phone: '+2349024475402',
-      email: 'contact@ayfood.ng',
+      email: 'contact@ayfoodpalace.com',
       address: 'Ogijo, Ikorodu, Lagos',
       city: 'Ikorodu',
       taxRate: 7.5,
@@ -211,7 +211,7 @@ async function main() {
 
   await prisma.user.create({
     data: {
-      email: 'admin@ayfood.ng',
+      email: 'contact@ayfoodpalace.com',
       passwordHash,
       firstName: 'Admin',
       lastName: 'Ay Food',

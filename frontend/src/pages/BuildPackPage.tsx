@@ -122,7 +122,8 @@ export default function BuildPackPage() {
       <div className="mb-8">
         {packs.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/20 bg-brand-dark-light p-8 text-center text-white/60">
-            No packs yet. Add an item below to create Pack 1 automatically.
+            No packs yet. Tap <span className="text-brand-gold">Create Pack</span> or add a dish
+            below to start Pack 1.
           </div>
         ) : (
           <div
@@ -282,11 +283,16 @@ export default function BuildPackPage() {
             onClick={() => {
               const nextIndex = packs.length;
               addPack();
-              focusPack(nextIndex, `Pack ${nextIndex + 1} created — now editing it. Add items below.`);
+              focusPack(
+                nextIndex,
+                packs.length === 0
+                  ? `Pack 1 created — now editing it. Add items below.`
+                  : `Pack ${nextIndex + 1} created — now editing it. Add items below.`,
+              );
             }}
             className="rounded-full bg-brand-gold px-5 py-2 text-sm font-semibold text-white hover:bg-brand-gold-dark"
           >
-            Add Another Pack
+            {packs.length === 0 ? 'Create Pack' : 'Add Another Pack'}
           </button>
           {packs.length > 0 && (
             <button
