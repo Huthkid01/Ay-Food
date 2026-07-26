@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { siteSettingsService } from '../../services/site-settings.service';
+import {
+  DEFAULT_MAINTENANCE_MESSAGE,
+  siteSettingsService,
+} from '../../services/site-settings.service';
 import { useToast } from '../../components/ui/Toast';
 import { useState, useEffect } from 'react';
+
+const LEGACY_MAINTENANCE_MESSAGE =
+  'We are temporarily closed. Please check back soon.';
 
 export default function AdminMaintenancePage() {
   const queryClient = useQueryClient();
@@ -12,12 +18,17 @@ export default function AdminMaintenancePage() {
   });
 
   const [enabled, setEnabled] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(DEFAULT_MAINTENANCE_MESSAGE);
 
   useEffect(() => {
     if (data) {
       setEnabled(data.maintenance_enabled);
-      setMessage(data.maintenance_message);
+      const existing = data.maintenance_message?.trim() || '';
+      setMessage(
+        !existing || existing === LEGACY_MAINTENANCE_MESSAGE
+          ? DEFAULT_MAINTENANCE_MESSAGE
+          : existing,
+      );
     }
   }, [data]);
 
@@ -25,7 +36,7 @@ export default function AdminMaintenancePage() {
     mutationFn: () =>
       siteSettingsService.update({
         maintenance_enabled: enabled,
-        maintenance_message: message.trim() || 'We are temporarily closed. Please check back soon.',
+        maintenance_message: message.trim() || DEFAULT_MAINTENANCE_MESSAGE,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site-settings'] });
@@ -49,12 +60,23 @@ export default function AdminMaintenancePage() {
         <label className="flex items-center justify-between gap-4">
           <div>
             <p className="font-medium">Maintenance mode</p>
-            <p className="text-sm text-white/50">Customers see a closed message instead of ordering</p>
+            <p className="text-sm text-white/50">
+              Customers see: “{DEFAULT_MAINTENANCE_MESSAGE}”
+            </p>
           </div>
           <input
             type="checkbox"
             checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setEnabled(on);
+              if (on) {
+                const current = message.trim();
+                if (!current || current === LEGACY_MAINTENANCE_MESSAGE) {
+                  setMessage(DEFAULT_MAINTENANCE_MESSAGE);
+                }
+              }
+            }}
             className="h-5 w-5"
           />
         </label>
@@ -65,6 +87,7 @@ export default function AdminMaintenancePage() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
+            placeholder={DEFAULT_MAINTENANCE_MESSAGE}
             className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
           />
         </div>

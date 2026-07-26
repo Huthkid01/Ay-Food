@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ImagePlus, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { ImagePlus, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { AdminModal } from '../../components/admin/AdminModal';
 import { AdminPagination, ADMIN_PAGE_SIZE } from '../../components/admin/AdminPagination';
 import { DeleteConfirmModal } from '../../components/admin/DeleteConfirmModal';
 import { useToast } from '../../components/ui/Toast';
@@ -358,139 +359,126 @@ export default function AdminCategoriesPage() {
         onPageChange={setPage}
       />
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <button
-            type="button"
-            className="absolute inset-0"
-            onClick={() => !save.isPending && setIsModalOpen(false)}
-            aria-label="Close"
-          />
-          <div className="relative z-10 w-full max-w-lg rounded-2xl border border-white/10 bg-brand-dark-light p-6 shadow-xl">
-            <div className="mb-5 flex items-start justify-between">
-              <h2 className="font-display text-2xl font-semibold">
-                {editing ? 'Edit category' : 'Add category'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="rounded-lg p-2 text-white/50 hover:bg-white/5"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <form
-              className="space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                save.mutate();
-              }}
+      <AdminModal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editing ? 'Edit category' : 'Add category'}
+        busy={save.isPending}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="rounded-full border border-white/20 px-5 py-2.5 text-sm"
+              disabled={save.isPending}
             >
-              <div>
-                <label className="mb-2 block text-sm text-white/60">Category image</label>
-                <div className="flex items-start gap-4">
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-brand-dark">
-                    {imagePreview || form.imageUrl ? (
-                      <img
-                        src={imagePreview || form.imageUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-white/25">
-                        <ImagePlus size={22} />
-                      </div>
-                    )}
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="admin-category-form"
+              disabled={save.isPending}
+              className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Add category'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="admin-category-form"
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate();
+          }}
+        >
+          <div>
+            <label className="mb-2 block text-sm text-white/60">Category image</label>
+            <div className="flex items-start gap-4">
+              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-brand-dark">
+                {imagePreview || form.imageUrl ? (
+                  <img
+                    src={imagePreview || form.imageUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-white/25">
+                    <ImagePlus size={22} />
                   </div>
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm hover:border-brand-gold hover:text-brand-gold">
-                    <Upload size={16} />
-                    Upload image
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      onChange={onPickImage}
-                    />
-                  </label>
-                </div>
+                )}
               </div>
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Name</label>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm hover:border-brand-gold hover:text-brand-gold">
+                <Upload size={16} />
+                Upload image
                 <input
-                  value={form.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    setForm((f) => ({
-                      ...f,
-                      name,
-                      slug: editing ? f.slug : slugify(name),
-                    }));
-                  }}
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                  required
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={onPickImage}
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Slug</label>
-                <input
-                  value={form.slug}
-                  onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-white/60">
-                  Description <span className="text-white/35">(optional)</span>
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  rows={3}
-                  placeholder="Optional"
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1 block text-sm text-white/60">Sort order</label>
-                  <input
-                    type="number"
-                    value={form.sortOrder}
-                    onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                  />
-                </div>
-                <label className="flex items-end gap-2 pb-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.isActive}
-                    onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-                  />
-                  Show on website
-                </label>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-full border border-white/20 px-5 py-2.5 text-sm"
-                  disabled={save.isPending}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={save.isPending}
-                  className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  {save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Add category'}
-                </button>
-              </div>
-            </form>
+              </label>
+            </div>
           </div>
-        </div>
-      )}
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Name</label>
+            <input
+              value={form.name}
+              onChange={(e) => {
+                const name = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  name,
+                  slug: editing ? f.slug : slugify(name),
+                }));
+              }}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Slug</label>
+            <input
+              value={form.slug}
+              onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-white/60">
+              Description <span className="text-white/35">(optional)</span>
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              rows={3}
+              placeholder="Optional"
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm text-white/60">Sort order</label>
+              <input
+                type="number"
+                value={form.sortOrder}
+                onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+              />
+            </div>
+            <label className="flex items-end gap-2 pb-3 text-sm">
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+              />
+              Show on website
+            </label>
+          </div>
+        </form>
+      </AdminModal>
 
       <DeleteConfirmModal
         open={!!pendingDelete}

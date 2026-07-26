@@ -8,8 +8,8 @@ import {
   Search,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
+import { AdminModal } from '../../components/admin/AdminModal';
 import { AdminPagination, ADMIN_PAGE_SIZE } from '../../components/admin/AdminPagination';
 import { ConfirmModal, DeleteConfirmModal } from '../../components/admin/DeleteConfirmModal';
 import { useToast } from '../../components/ui/Toast';
@@ -574,214 +574,199 @@ export default function AdminMenuPage() {
         onPageChange={setPage}
       />
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <button
-            type="button"
-            className="absolute inset-0"
-            onClick={() => !save.isPending && setIsModalOpen(false)}
-            aria-label="Close"
-          />
-          <div className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-brand-dark-light p-6 shadow-xl">
-            <div className="mb-5 flex items-start justify-between">
-              <h2 className="font-display text-2xl font-semibold">
-                {editing ? 'Edit dish' : 'Add dish'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="rounded-lg p-2 text-white/50 hover:bg-white/5"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <form
-              className="space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                save.mutate();
-              }}
+      <AdminModal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editing ? 'Edit dish' : 'Add dish'}
+        busy={save.isPending}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="rounded-full border border-white/20 px-5 py-2.5 text-sm"
+              disabled={save.isPending}
             >
-              <div>
-                <label className="mb-2 block text-sm text-white/60">Dish photo</label>
-                <div className="flex items-start gap-4">
-                  <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-brand-dark">
-                    {previewSrc ? (
-                      <img src={previewSrc} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-white/25">
-                        <ImagePlus size={28} />
-                      </div>
-                    )}
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="admin-dish-form"
+              disabled={save.isPending || form.price.trim() === ''}
+              className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Add dish'}
+            </button>
+          </>
+        }
+      >
+        <form
+          id="admin-dish-form"
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate();
+          }}
+        >
+          <div>
+            <label className="mb-2 block text-sm text-white/60">Dish photo</label>
+            <div className="flex items-start gap-4">
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-brand-dark">
+                {previewSrc ? (
+                  <img src={previewSrc} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-white/25">
+                    <ImagePlus size={28} />
                   </div>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm hover:border-brand-gold hover:text-brand-gold">
-                      <Upload size={16} />
-                      Upload image
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        className="hidden"
-                        onChange={onPickImage}
-                      />
-                    </label>
-                    <p className="text-xs text-white/40">JPG, PNG or WebP · max 5MB</p>
-                    {(previewSrc || form.imageUrl) && (
-                      <button
-                        type="button"
-                        className="text-xs text-red-300 hover:underline"
-                        onClick={() => {
-                          resetImageState();
-                          setForm((f) => ({ ...f, imageUrl: '' }));
-                        }}
-                      >
-                        Remove photo
-                      </button>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Name</label>
-                <input
-                  value={form.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    setForm((f) => ({
-                      ...f,
-                      name,
-                      slug: editing ? f.slug : slugify(name),
-                    }));
-                  }}
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Slug</label>
-                <input
-                  value={form.slug}
-                  onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Category</label>
-                <select
-                  value={form.categoryId}
-                  onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                  required
-                >
-                  <option value="">Select category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="rounded-xl border border-brand-gold/30 bg-brand-gold/5 p-4">
-                <label className="mb-1 block text-sm font-medium text-brand-gold">
-                  Price (₦)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  step={50}
-                  value={form.price}
-                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                  placeholder="Required — use 0 for free soups"
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 text-lg font-semibold outline-none focus:border-brand-gold"
-                  required
-                />
-                {form.price.trim() === '' ? (
-                  <p className="mt-2 text-sm text-red-300/90">
-                    Price is required. Enter 0 or any amount above 0.
-                  </p>
-                ) : Number(form.price) === 0 ? (
-                  <p className="mt-2 text-sm text-white/50">
-                    Customers can add this for ₦0 — it still appears in their order summary.
-                  </p>
-                ) : Number.isFinite(Number(form.price)) && Number(form.price) > 0 ? (
-                  <p className="mt-2 text-sm text-white/50">
-                    Customers will see {formatCurrency(Number(form.price))}
-                  </p>
-                ) : null}
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Prep time (minutes)</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={form.prepTimeMinutes}
-                  onChange={(e) => setForm((f) => ({ ...f, prepTimeMinutes: e.target.value }))}
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-white/60">
-                  Description <span className="text-white/35">(optional)</span>
-                </label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  rows={3}
-                  placeholder="Leave blank if you only want a photo and price"
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
-                />
-              </div>
-              <div className="flex flex-wrap gap-4 text-sm">
-                <label className="flex items-center gap-2">
+              <div className="min-w-0 flex-1 space-y-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm hover:border-brand-gold hover:text-brand-gold">
+                  <Upload size={16} />
+                  Upload image
                   <input
-                    type="checkbox"
-                    checked={form.isAvailable}
-                    onChange={(e) => setForm((f) => ({ ...f, isAvailable: e.target.checked }))}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={onPickImage}
                   />
-                  Available on site
                 </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={form.isPopular}
-                    onChange={(e) => setForm((f) => ({ ...f, isPopular: e.target.checked }))}
-                  />
-                  Popular
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={form.isNew}
-                    onChange={(e) => setForm((f) => ({ ...f, isNew: e.target.checked }))}
-                  />
-                  New
-                </label>
+                <p className="text-xs text-white/40">JPG, PNG or WebP · max 5MB</p>
+                {(previewSrc || form.imageUrl) && (
+                  <button
+                    type="button"
+                    className="text-xs text-red-300 hover:underline"
+                    onClick={() => {
+                      resetImageState();
+                      setForm((f) => ({ ...f, imageUrl: '' }));
+                    }}
+                  >
+                    Remove photo
+                  </button>
+                )}
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="rounded-full border border-white/20 px-5 py-2.5 text-sm"
-                  disabled={save.isPending}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={save.isPending || form.price.trim() === ''}
-                  className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  {save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Add dish'}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Name</label>
+            <input
+              value={form.name}
+              onChange={(e) => {
+                const name = e.target.value;
+                setForm((f) => ({
+                  ...f,
+                  name,
+                  slug: editing ? f.slug : slugify(name),
+                }));
+              }}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Slug</label>
+            <input
+              value={form.slug}
+              onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Category</label>
+            <select
+              value={form.categoryId}
+              onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+              required
+            >
+              <option value="">Select category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-xl border border-brand-gold/30 bg-brand-gold/5 p-4">
+            <label className="mb-1 block text-sm font-medium text-brand-gold">Price (₦)</label>
+            <input
+              type="number"
+              min={0}
+              step={50}
+              value={form.price}
+              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+              placeholder="Required — use 0 for free soups"
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 text-lg font-semibold outline-none focus:border-brand-gold"
+              required
+            />
+            {form.price.trim() === '' ? (
+              <p className="mt-2 text-sm text-red-300/90">
+                Price is required. Enter 0 or any amount above 0.
+              </p>
+            ) : Number(form.price) === 0 ? (
+              <p className="mt-2 text-sm text-white/50">
+                Customers can add this for ₦0 — it still appears in their order summary.
+              </p>
+            ) : Number.isFinite(Number(form.price)) && Number(form.price) > 0 ? (
+              <p className="mt-2 text-sm text-white/50">
+                Customers will see {formatCurrency(Number(form.price))}
+              </p>
+            ) : null}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Prep time (minutes)</label>
+            <input
+              type="number"
+              min={1}
+              value={form.prepTimeMinutes}
+              onChange={(e) => setForm((f) => ({ ...f, prepTimeMinutes: e.target.value }))}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-white/60">
+              Description <span className="text-white/35">(optional)</span>
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              rows={3}
+              placeholder="Leave blank if you only want a photo and price"
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 outline-none focus:border-brand-gold"
+            />
+          </div>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.isAvailable}
+                onChange={(e) => setForm((f) => ({ ...f, isAvailable: e.target.checked }))}
+              />
+              Available on site
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.isPopular}
+                onChange={(e) => setForm((f) => ({ ...f, isPopular: e.target.checked }))}
+              />
+              Popular
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.isNew}
+                onChange={(e) => setForm((f) => ({ ...f, isNew: e.target.checked }))}
+              />
+              New
+            </label>
+          </div>
+        </form>
+      </AdminModal>
 
       <DeleteConfirmModal
         open={!!pendingDelete}

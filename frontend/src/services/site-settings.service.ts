@@ -1,13 +1,17 @@
-import type { SiteSettings } from './site-settings.types';
+import {
+  DEFAULT_MAINTENANCE_MESSAGE,
+  type SiteSettings,
+} from './site-settings.types';
 
 export type { SiteSettings } from './site-settings.types';
+export { DEFAULT_MAINTENANCE_MESSAGE } from './site-settings.types';
 
 /** Cache maintenance settings for instant paint; source of truth is Supabase. */
 const SETTINGS_CACHE_KEY = 'ay-food-site-settings';
 
 const defaults = (): SiteSettings => ({
   maintenance_enabled: false,
-  maintenance_message: 'We are temporarily closed. Please check back soon.',
+  maintenance_message: DEFAULT_MAINTENANCE_MESSAGE,
 });
 
 function readCache(): SiteSettings | null {

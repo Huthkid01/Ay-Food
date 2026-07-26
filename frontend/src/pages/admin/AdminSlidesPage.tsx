@@ -11,9 +11,9 @@ import {
   RefreshCw,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
+import { AdminModal } from '../../components/admin/AdminModal';
 import { ConfirmModal } from '../../components/admin/DeleteConfirmModal';
 import {
   DEFAULT_SITE_CONTENT,
@@ -234,332 +234,348 @@ export default function AdminSlidesPage() {
         </div>
       </div>
 
-      <div className="space-y-3">
-        {draft.heroSlides.length === 0 ? (
-          <p className="rounded-2xl border border-white/10 bg-brand-dark-light p-8 text-center text-white/50">
-            No sliders yet. Click Add Slider to create one.
-          </p>
-        ) : (
-          draft.heroSlides.map((slide, index) => {
-            const active = slide.active !== false;
-            return (
-              <div
-                key={`${slide.image}-${index}`}
-                className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-brand-dark-light/60 p-3 sm:flex-nowrap sm:gap-4 sm:p-4"
-              >
-                <div className="flex shrink-0 flex-col gap-1">
-                  <button
-                    type="button"
-                    disabled={index === 0 || save.isPending}
-                    onClick={() => moveSlide(index, index - 1)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2 py-1.5 text-xs font-medium text-white/70 hover:border-brand-gold hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-30"
-                    title="Move up"
-                  >
-                    <ChevronUp size={14} />
-                    <span className="hidden sm:inline">Up</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === draft.heroSlides.length - 1 || save.isPending}
-                    onClick={() => moveSlide(index, index + 1)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2 py-1.5 text-xs font-medium text-white/70 hover:border-brand-gold hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-30"
-                    title="Move down"
-                  >
-                    <ChevronDown size={14} />
-                    <span className="hidden sm:inline">Down</span>
-                  </button>
-                </div>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-brand-dark text-sm font-bold text-brand-gold">
-                  {index + 1}
-                </div>
-                <div className="h-16 w-28 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-brand-dark sm:h-20 sm:w-36">
-                  {slide.image ? (
-                    <img src={slide.image} alt="" className="h-full w-full object-cover" />
-                  ) : null}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-semibold">{slideTitle(slide)}</p>
-                    <span
-                      className={cn(
-                        'rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
-                        active
-                          ? 'bg-emerald-500/20 text-emerald-300'
-                          : 'bg-white/10 text-white/50',
-                      )}
-                    >
-                      {active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  {slide.description ? (
-                    <p className="mt-1 line-clamp-1 text-sm text-white/45">{slide.description}</p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-                  <a
-                    href={slide.primaryCta.to || '/'}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-lg p-2 text-white/50 hover:bg-white/5 hover:text-white"
-                    title="Open CTA link"
-                  >
-                    <ExternalLink size={16} />
-                  </a>
-                  <a
-                    href="/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-lg p-2 text-white/50 hover:bg-white/5 hover:text-white"
-                    title="View homepage"
-                  >
-                    <Eye size={16} />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(index)}
-                    className="rounded-lg p-2 text-sky-400 hover:bg-sky-500/10"
-                    title="Edit"
-                  >
-                    <Pencil size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteIndex(index)}
-                    className="rounded-lg p-2 text-red-400 hover:bg-red-500/10"
-                    title="Delete"
-                    disabled={draft.heroSlides.length <= 1}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
+      <div className="overflow-x-auto rounded-2xl border border-white/10">
+        <table className="w-full min-w-190 text-left text-sm">
+          <thead className="bg-brand-dark-light text-white/50">
+            <tr>
+              <th className="px-4 py-3 font-medium tracking-wide uppercase">Order</th>
+              <th className="px-4 py-3 font-medium tracking-wide uppercase">Slide</th>
+              <th className="px-4 py-3 font-medium tracking-wide uppercase">Status</th>
+              <th className="px-4 py-3 font-medium tracking-wide uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {draft.heroSlides.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-10 text-center text-white/40">
+                  No sliders yet. Click Add Slider to create one.
+                </td>
+              </tr>
+            ) : (
+              draft.heroSlides.map((slide, index) => {
+                const active = slide.active !== false;
+                return (
+                  <tr key={`${slide.image}-${index}`} className="border-t border-white/5">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            disabled={index === 0 || save.isPending}
+                            onClick={() => moveSlide(index, index - 1)}
+                            className="rounded-lg border border-white/10 p-1.5 text-white/70 hover:bg-white/5 hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-30"
+                            title="Move up"
+                            aria-label="Move up"
+                          >
+                            <ChevronUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === draft.heroSlides.length - 1 || save.isPending}
+                            onClick={() => moveSlide(index, index + 1)}
+                            className="rounded-lg border border-white/10 p-1.5 text-white/70 hover:bg-white/5 hover:text-brand-gold disabled:cursor-not-allowed disabled:opacity-30"
+                            title="Move down"
+                            aria-label="Move down"
+                          >
+                            <ChevronDown size={14} />
+                          </button>
+                        </div>
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-brand-dark text-sm font-bold text-brand-gold">
+                          {index + 1}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-brand-dark">
+                          {slide.image ? (
+                            <img
+                              src={slide.image}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{slideTitle(slide)}</p>
+                          {slide.description ? (
+                            <p className="mt-0.5 line-clamp-1 text-xs text-white/40">
+                              {slide.description}
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-xs text-white/40">
+                              {slide.primaryCta.label || '—'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={
+                          active
+                            ? 'rounded-full bg-brand-green/20 px-3 py-1 text-xs text-brand-green'
+                            : 'rounded-full bg-white/10 px-3 py-1 text-xs text-white/40'
+                        }
+                      >
+                        {active ? 'Active' : 'Hidden'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <a
+                          href={slide.primaryCta.to || '/'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-white/10 p-2 text-white/70 hover:bg-white/5 hover:text-brand-gold"
+                          aria-label="Open CTA link"
+                          title="Open CTA link"
+                        >
+                          <ExternalLink size={16} />
+                        </a>
+                        <a
+                          href="/"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-white/10 p-2 text-white/70 hover:bg-white/5 hover:text-brand-gold"
+                          aria-label="View homepage"
+                          title="View homepage"
+                        >
+                          <Eye size={16} />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(index)}
+                          className="rounded-full border border-white/10 p-2 text-white/70 hover:bg-white/5 hover:text-brand-gold"
+                          aria-label={`Edit ${slideTitle(slide)}`}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteIndex(index)}
+                          disabled={draft.heroSlides.length <= 1}
+                          className="rounded-full border border-white/10 p-2 text-white/70 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-30"
+                          aria-label={`Delete ${slideTitle(slide)}`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default"
-            aria-label="Close"
-            onClick={closeModal}
-          />
-          <div className="relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-[#0b1628] sm:rounded-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-              <h2 className="text-lg font-semibold">{isNew ? 'Add Slider' : 'Edit Slider'}</h2>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-lg p-1.5 text-white/50 hover:bg-white/5 hover:text-white"
-              >
-                <X size={18} />
-              </button>
+      <AdminModal
+        open={modalOpen}
+        onClose={closeModal}
+        title={isNew ? 'Add Slider' : 'Edit Slider'}
+        busy={save.isPending}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={closeModal}
+              className="rounded-full border border-white/20 px-5 py-2.5 text-sm"
+              disabled={save.isPending}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveModal}
+              disabled={save.isPending || uploading}
+              className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {save.isPending ? 'Saving…' : isNew ? 'Add Slider' : 'Save Changes'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="aspect-[16/9] overflow-hidden rounded-xl border border-white/10 bg-brand-dark">
+            {form.image ? (
+              <img src={form.image} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-white/40">
+                No image
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Image URL</label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+              value={form.image}
+              onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
+              placeholder="https://… or /assets/…"
+            />
+          </div>
+
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 px-4 py-6 text-sm text-white/60 hover:border-brand-gold hover:text-brand-gold">
+            <Upload size={20} />
+            {uploading ? 'Uploading…' : '+ Upload image'}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                const file = e.target.files?.[0];
+                if (file) void uploadHeroImage(file);
+                e.target.value = '';
+              }}
+            />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm text-white/60">Title *</label>
+              <input
+                className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              />
             </div>
-
-            <div className="space-y-4 overflow-y-auto px-5 py-4">
-              <div className="aspect-[16/9] overflow-hidden rounded-xl border border-white/10 bg-brand-dark">
-                {form.image ? (
-                  <img src={form.image} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-white/40">
-                    No image
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Image URL</label>
-                <input
-                  className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                  value={form.image}
-                  onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
-                  placeholder="https://… or /assets/…"
-                />
-              </div>
-
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 px-4 py-6 text-sm text-white/60 hover:border-brand-gold hover:text-brand-gold">
-                <Upload size={20} />
-                {uploading ? 'Uploading…' : '+ Upload image'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={uploading}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    const file = e.target.files?.[0];
-                    if (file) void uploadHeroImage(file);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm text-white/60">Title *</label>
-                  <input
-                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                    value={form.title}
-                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm text-white/60">Highlight</label>
-                  <input
-                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                    value={form.highlight ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, highlight: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Tagline</label>
-                <input
-                  className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                  value={form.tagline}
-                  onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
-                  placeholder="Optional eyebrow text"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Description</label>
-                <textarea
-                  rows={3}
-                  className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  placeholder="Optional tagline shown on the slide"
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm text-white/60">Primary CTA label</label>
-                  <input
-                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                    value={form.primaryCta.label}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        primaryCta: { ...f.primaryCta, label: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm text-white/60">URL / link</label>
-                  <input
-                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                    value={form.primaryCta.to}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        primaryCta: { ...f.primaryCta, to: e.target.value },
-                      }))
-                    }
-                    placeholder="/menu"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm text-white/60">Secondary CTA label</label>
-                  <input
-                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                    value={form.secondaryCta.label}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        secondaryCta: { ...f.secondaryCta, label: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm text-white/60">Secondary CTA link</label>
-                  <input
-                    className="w-full rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                    value={form.secondaryCta.to}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        secondaryCta: { ...f.secondaryCta, to: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm text-white/60">Display order</label>
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    type="number"
-                    min={1}
-                    max={isNew ? draft.heroSlides.length + 1 : draft.heroSlides.length}
-                    className="w-24 rounded-xl border border-white/10 bg-[#07111f] px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
-                    value={orderInput}
-                    onChange={(e) => setOrderInput(Number(e.target.value) || 1)}
-                  />
-                  <span className="text-xs text-white/40">
-                    1 = first on homepage · {isNew ? draft.heroSlides.length + 1 : draft.heroSlides.length}{' '}
-                    total
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-[#07111f] px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium">Active</p>
-                  <p className="text-xs text-white/40">Inactive slides are hidden on the site</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={form.active !== false}
-                  onClick={() =>
-                    setForm((f) => ({ ...f, active: !(f.active !== false) }))
-                  }
-                  className={cn(
-                    'relative h-7 w-12 rounded-full transition-colors',
-                    form.active !== false ? 'bg-emerald-500' : 'bg-white/20',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white transition-transform',
-                      form.active !== false && 'translate-x-5',
-                    )}
-                  />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 border-t border-white/10 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-full border border-white/20 px-5 py-2.5 text-sm"
-                disabled={save.isPending}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={saveModal}
-                disabled={save.isPending || uploading}
-                className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {save.isPending ? 'Saving…' : isNew ? 'Add Slider' : 'Save Changes'}
-              </button>
+            <div>
+              <label className="mb-1 block text-sm text-white/60">Highlight</label>
+              <input
+                className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                value={form.highlight ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, highlight: e.target.value }))}
+              />
             </div>
           </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Tagline</label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+              value={form.tagline}
+              onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
+              placeholder="Optional eyebrow text"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Description</label>
+            <textarea
+              rows={3}
+              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Optional tagline shown on the slide"
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm text-white/60">Primary CTA label</label>
+              <input
+                className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                value={form.primaryCta.label}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    primaryCta: { ...f.primaryCta, label: e.target.value },
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-white/60">URL / link</label>
+              <input
+                className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                value={form.primaryCta.to}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    primaryCta: { ...f.primaryCta, to: e.target.value },
+                  }))
+                }
+                placeholder="/menu"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm text-white/60">Secondary CTA label</label>
+              <input
+                className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                value={form.secondaryCta.label}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    secondaryCta: { ...f.secondaryCta, label: e.target.value },
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-white/60">Secondary CTA link</label>
+              <input
+                className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                value={form.secondaryCta.to}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    secondaryCta: { ...f.secondaryCta, to: e.target.value },
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-white/60">Display order</label>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={isNew ? draft.heroSlides.length + 1 : draft.heroSlides.length}
+                className="w-24 rounded-xl border border-white/10 bg-brand-dark px-4 py-2.5 text-sm outline-none focus:border-brand-gold"
+                value={orderInput}
+                onChange={(e) => setOrderInput(Number(e.target.value) || 1)}
+              />
+              <span className="text-xs text-white/40">
+                1 = first on homepage · {isNew ? draft.heroSlides.length + 1 : draft.heroSlides.length}{' '}
+                total
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-brand-dark px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Active</p>
+              <p className="text-xs text-white/40">Inactive slides are hidden on the site</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.active !== false}
+              onClick={() => setForm((f) => ({ ...f, active: !(f.active !== false) }))}
+              className={cn(
+                'relative h-7 w-12 rounded-full transition-colors',
+                form.active !== false ? 'bg-emerald-500' : 'bg-white/20',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white transition-transform',
+                  form.active !== false && 'translate-x-5',
+                )}
+              />
+            </button>
+          </div>
         </div>
-      )}
+      </AdminModal>
 
       <ConfirmModal
         open={deleteIndex !== null}
