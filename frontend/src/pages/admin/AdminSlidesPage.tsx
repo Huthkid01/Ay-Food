@@ -27,7 +27,7 @@ import { cn } from '../../utils/helpers';
 
 function emptySlide(): HeroSlide {
   return {
-    image: '/assets/hero.png',
+    image: '/assets/hero-restaurant.webp',
     tagline: '',
     title: '',
     highlight: '',

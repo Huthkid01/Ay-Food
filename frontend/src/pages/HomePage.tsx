@@ -148,7 +148,7 @@ export default function HomePage() {
         <div className="site-container">
           <div className="relative overflow-hidden rounded-[2rem] border border-brand-subtle px-8 py-16 text-center sm:px-12 sm:py-20">
             <img
-              src="/assets/hero-interior-1.webp"
+              src="/assets/hero-signature.webp"
               alt=""
               width={1280}
               height={1670}

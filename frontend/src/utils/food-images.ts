@@ -65,38 +65,62 @@ function u(id: string) {
   return buildUnsplashUrl(id, 'card');
 }
 
-export const HERO_IMAGE = '/assets/hero.webp';
-export const HERO_INTERIOR_1 = '/assets/hero-interior-1.webp';
-export const HERO_INTERIOR_2 = '/assets/hero-interior-2.webp';
+export const HERO_IMAGE = '/assets/hero-restaurant.webp';
+export const HERO_INTERIOR_1 = '/assets/hero-signature.webp';
+export const HERO_INTERIOR_2 = '/assets/hero-variety-alt.webp';
 
-/** PNG fallbacks for older browsers / OG crawlers. */
+/** PNG fallbacks for older browsers / OG crawlers (legacy filenames). */
 export const HERO_IMAGE_FALLBACK = '/assets/hero.png';
 export const HERO_INTERIOR_1_FALLBACK = '/assets/hero-interior-1.png';
 export const HERO_INTERIOR_2_FALLBACK = '/assets/hero-interior-2.png';
 
 const HERO_MOBILE: Record<string, string> = {
-  [HERO_IMAGE]: '/assets/hero-768.webp',
-  [HERO_INTERIOR_1]: '/assets/hero-interior-1-768.webp',
-  [HERO_INTERIOR_2]: '/assets/hero-interior-2-768.webp',
-  '/assets/hero.png': '/assets/hero-768.webp',
-  '/assets/hero-interior-1.png': '/assets/hero-interior-1-768.webp',
-  '/assets/hero-interior-2.png': '/assets/hero-interior-2-768.webp',
+  [HERO_IMAGE]: '/assets/hero-restaurant-768.webp',
+  [HERO_INTERIOR_1]: '/assets/hero-signature-768.webp',
+  [HERO_INTERIOR_2]: '/assets/hero-variety-alt.webp',
+  '/assets/hero-restaurant.webp': '/assets/hero-restaurant-768.webp',
+  '/assets/hero-signature.webp': '/assets/hero-signature-768.webp',
+  '/assets/hero.webp': '/assets/hero-restaurant-768.webp',
+  '/assets/hero.png': '/assets/hero-restaurant-768.webp',
+  '/assets/hero-interior-1.webp': '/assets/hero-signature-768.webp',
+  '/assets/hero-interior-1.png': '/assets/hero-signature-768.webp',
+  '/assets/hero-interior-2.webp': '/assets/hero-variety-alt.webp',
+  '/assets/hero-interior-2.png': '/assets/hero-variety-alt.webp',
 };
 
 const HERO_FALLBACK: Record<string, string> = {
   [HERO_IMAGE]: HERO_IMAGE_FALLBACK,
   [HERO_INTERIOR_1]: HERO_INTERIOR_1_FALLBACK,
   [HERO_INTERIOR_2]: HERO_INTERIOR_2_FALLBACK,
-  '/assets/hero.png': HERO_IMAGE_FALLBACK,
-  '/assets/hero-interior-1.png': HERO_INTERIOR_1_FALLBACK,
-  '/assets/hero-interior-2.png': HERO_INTERIOR_2_FALLBACK,
 };
 
-/** Prefer WebP hero paths even if CMS still stores .png. */
+/**
+ * Prefer current story assets. Old CMS / localStorage paths (hero.png, interiors)
+ * map onto restaurant → signature → variety so admin + homepage stay in sync.
+ */
 export function normalizeHeroImage(src: string): string {
-  if (src.endsWith('/hero.png')) return HERO_IMAGE;
-  if (src.endsWith('/hero-interior-1.png')) return HERO_INTERIOR_1;
-  if (src.endsWith('/hero-interior-2.png')) return HERO_INTERIOR_2;
+  const path = src.split('?')[0] ?? src;
+  if (
+    path.endsWith('/hero.png') ||
+    path.endsWith('/hero.webp') ||
+    path.endsWith('/hero-768.webp')
+  ) {
+    return HERO_IMAGE;
+  }
+  if (
+    path.endsWith('/hero-interior-1.png') ||
+    path.endsWith('/hero-interior-1.webp') ||
+    path.endsWith('/hero-interior-1-768.webp')
+  ) {
+    return HERO_INTERIOR_1;
+  }
+  if (
+    path.endsWith('/hero-interior-2.png') ||
+    path.endsWith('/hero-interior-2.webp') ||
+    path.endsWith('/hero-interior-2-768.webp')
+  ) {
+    return HERO_INTERIOR_2;
+  }
   return src;
 }
 

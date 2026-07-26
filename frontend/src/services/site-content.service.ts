@@ -3,6 +3,7 @@ import {
   type SiteContent,
 } from '../data/default-site-content';
 import type { HeroSlide } from '../utils/food-images';
+import { normalizeHeroImage } from '../utils/food-images';
 
 export type { SiteContent };
 export { DEFAULT_SITE_CONTENT, brandDisplayName } from '../data/default-site-content';
@@ -25,7 +26,10 @@ function mergeHeroSlide(base: HeroSlide, patch: unknown): HeroSlide {
   const primary = isRecord(patch.primaryCta) ? patch.primaryCta : {};
   const secondary = isRecord(patch.secondaryCta) ? patch.secondaryCta : {};
   return {
-    image: typeof patch.image === 'string' && patch.image ? patch.image : base.image,
+    image:
+      typeof patch.image === 'string' && patch.image
+        ? normalizeHeroImage(patch.image)
+        : normalizeHeroImage(base.image),
     tagline: typeof patch.tagline === 'string' ? patch.tagline : base.tagline,
     title: typeof patch.title === 'string' ? patch.title : base.title,
     highlight: typeof patch.highlight === 'string' ? patch.highlight : base.highlight,
