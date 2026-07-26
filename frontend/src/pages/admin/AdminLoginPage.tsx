@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Building2, Eye, EyeOff, Lock, Shield, UtensilsCrossed } from 'lucide-react';
-import { useAdminAuth, ADMIN_DEMO_CREDENTIALS } from '../../contexts/AdminAuthContext';
+import { Building2, Eye, EyeOff, Lock, Shield } from 'lucide-react';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { resetAdminThemeForLogin } from '../../contexts/AdminThemeContext';
+import { BrandLogo } from '../../components/ui/BrandLogo';
 
 const adminDepartments = [
   'Kitchen',
@@ -16,7 +17,7 @@ const adminDepartments = [
 export default function AdminLoginPage() {
   const { login } = useAdminAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState(ADMIN_DEMO_CREDENTIALS.email);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [department, setDepartment] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -46,24 +47,19 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,#fff7f2_0%,#f8f9fa_45%,#eef2f7_100%)] px-4 py-10 text-gray-900">
+    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,#faf6f2_0%,#f4f4f5_50%,#eceef1_100%)] px-4 py-10 text-gray-900">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-5 flex items-center justify-center gap-2.5">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#FF6B00] text-white shadow-md shadow-orange-500/25">
-              <UtensilsCrossed className="h-5 w-5" />
-            </span>
-            <span className="font-display text-3xl font-bold tracking-tight text-gray-900">
-              Ay <span className="text-[#FF6B00]">Food</span>
-            </span>
+          <div className="mx-auto mb-5 flex items-center justify-center">
+            <BrandLogo size="lg" tone="light" />
           </div>
           <p className="text-sm text-gray-500">Admin Dashboard Access</p>
         </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-7 shadow-2xl">
+        <div className="rounded-3xl border border-gray-200/80 bg-white p-7 shadow-xl shadow-black/5">
           <div className="mb-6 flex justify-center">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#fff3eb] px-4 py-2 text-xs font-semibold text-[#c44d10]">
-              <Shield className="h-3.5 w-3.5 text-[#FF6B00]" />
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#fff4ec] px-4 py-2 text-xs font-semibold text-brand-gold-dark">
+              <Shield className="h-3.5 w-3.5 text-brand-gold" />
               Secure Admin Access
             </span>
           </div>
@@ -78,8 +74,8 @@ export default function AdminLoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-12 w-full rounded-lg border border-gray-200 bg-white px-4 text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#FF6B00]"
-                placeholder="admin@example.com"
+                className="h-12 w-full rounded-lg border border-gray-200 bg-white px-4 text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand-gold/40"
+                placeholder="Enter your email"
                 required
                 autoComplete="username"
               />
@@ -96,7 +92,7 @@ export default function AdminLoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 w-full rounded-lg border border-gray-200 bg-white py-3 pr-12 pl-10 text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-[#FF6B00]"
+                  className="h-12 w-full rounded-lg border border-gray-200 bg-white py-3 pr-12 pl-10 text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand-gold/40"
                   placeholder="Enter your password"
                   required
                   autoComplete="current-password"
@@ -122,7 +118,7 @@ export default function AdminLoginPage() {
                   id="admin-department"
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  className="flex h-12 w-full appearance-none rounded-lg border border-gray-200 bg-white pr-10 pl-10 text-sm text-gray-900 outline-none transition-colors focus:ring-2 focus:ring-[#FF6B00]"
+                  className="flex h-12 w-full appearance-none rounded-lg border border-gray-200 bg-white pr-10 pl-10 text-sm text-gray-900 outline-none transition-colors focus:ring-2 focus:ring-brand-gold/40"
                 >
                   <option value="">Select your department</option>
                   {adminDepartments.map((dept) => (
@@ -139,7 +135,7 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={pending}
-              className="flex h-12 w-full items-center justify-center rounded-xl bg-[#FF6B00] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#E85D04] disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex h-12 w-full items-center justify-center rounded-xl bg-brand-gold px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-gold-dark disabled:cursor-not-allowed disabled:opacity-70"
             >
               {pending ? 'Signing in...' : 'Sign In to Dashboard'}
             </button>
@@ -147,7 +143,7 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="mt-6 text-center">
-          <Link to="/" className="text-sm text-gray-500 hover:text-[#FF6B00]">
+          <Link to="/" className="text-sm text-gray-500 hover:text-brand-gold">
             Back to public website
           </Link>
         </div>

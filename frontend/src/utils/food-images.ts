@@ -85,34 +85,36 @@ export interface HeroSlide {
 export const HERO_SLIDES: HeroSlide[] = [
   {
     image: HERO_IMAGE,
-    tagline: 'Local food at its best',
-    title: 'Ay',
-    highlight: 'Food',
+    tagline: 'Ogijo · Fresh daily',
+    title: 'Fresh Nigerian Meals,',
+    highlight: 'Delivered Hot.',
     description:
-      'Build your perfect meal pack with authentic Nigerian cuisine. Choose your rice, swallow, soup, proteins and more — customized to your taste.',
-    primaryCta: { label: 'Build Your Pack', to: '/build' },
+      'Order authentic Nigerian dishes prepared fresh daily from our Ogijo kitchen.',
+    primaryCta: { label: 'Order Now', to: '/menu' },
     secondaryCta: { label: 'Browse Menu', to: '/menu' },
     imagePosition: '70% center',
   },
   {
     image: HERO_INTERIOR_1,
-    tagline: 'Dine in with us',
-    title: 'Vibrant Dining,',
-    highlight: 'Authentic Flavours',
+    tagline: 'Made to order',
+    title: 'Build Your Perfect',
+    highlight: 'Meal Pack',
     description:
-      'Enjoy fresh Nigerian meals in our colourful Ogijo restaurant — great food, great atmosphere, and a welcome you’ll feel the moment you walk in.',
-    primaryCta: { label: 'Browse Menu', to: '/menu' },
-    secondaryCta: { label: 'Build Your Pack', to: '/build' },
+      'Choose swallow, soups, proteins, and sides — customized to your taste and delivered hot.',
+    primaryCta: { label: 'Order Now', to: '/build' },
+    secondaryCta: { label: 'Browse Menu', to: '/menu' },
+    imagePosition: 'center',
   },
   {
     image: HERO_INTERIOR_2,
     tagline: 'Ogijo · Ikorodu · Lagos',
-    title: 'Order Hot Meals',
+    title: 'Hot Meals,',
     highlight: 'To Your Door',
     description:
-      'Same kitchen, same taste — delivered across Ogijo and Ikorodu. Browse the menu, add to cart, and checkout in minutes. No account needed.',
-    primaryCta: { label: 'Start Ordering', to: '/menu' },
-    secondaryCta: { label: 'Track Order', to: '/track' },
+      'Same kitchen, same taste — order online for delivery or pickup. No account needed.',
+    primaryCta: { label: 'Order Now', to: '/menu' },
+    secondaryCta: { label: 'Browse Menu', to: '/menu' },
+    imagePosition: 'center',
   },
 ];
 

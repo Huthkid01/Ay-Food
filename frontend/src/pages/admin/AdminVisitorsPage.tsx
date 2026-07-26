@@ -72,7 +72,8 @@ export default function AdminVisitorsPage() {
         <div>
           <h1 className="font-display text-3xl font-bold">Site Visits</h1>
           <p className="mt-1 text-sm text-white/50">
-            Live traffic · on site now = active in the last {SITE_ACTIVE_WINDOW_MINUTES} minutes
+            Live traffic · on site now = active in the last {SITE_ACTIVE_WINDOW_MINUTES} minutes.
+            Location uses the visitor’s browser GPS (if allowed) or their real IP address.
           </p>
         </div>
         <button

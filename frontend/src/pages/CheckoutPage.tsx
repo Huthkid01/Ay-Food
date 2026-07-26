@@ -241,51 +241,51 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="mb-8 font-display text-4xl font-bold">
+    <div className="site-container max-w-5xl pb-28 pt-8 sm:pb-12 sm:pt-10">
+      <h1 className="mb-8 font-display text-4xl font-semibold tracking-tight sm:mb-10">
         <span className="text-gradient">Checkout</span>
       </h1>
 
       <form
         onSubmit={handleSubmit((d) => openPaymentDraft(d))}
-        className="grid gap-8 lg:grid-cols-2"
+        className="grid gap-8 lg:grid-cols-2 lg:gap-10"
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <label htmlFor="checkout-name" className="mb-1 block text-sm text-white/60">
+            <label htmlFor="checkout-name" className="mb-1.5 block text-sm text-secondary">
               Full Name
             </label>
             <input
               id="checkout-name"
               {...register('customerName')}
-              className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+              className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
             />
             {errors.customerName && (
               <p className="mt-1 text-xs text-red-400">{errors.customerName.message}</p>
             )}
           </div>
           <div>
-            <label htmlFor="checkout-phone" className="mb-1 block text-sm text-white/60">
+            <label htmlFor="checkout-phone" className="mb-1.5 block text-sm text-secondary">
               Phone
             </label>
             <input
               id="checkout-phone"
               {...register('customerPhone')}
-              className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+              className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
             />
             {errors.customerPhone && (
               <p className="mt-1 text-xs text-red-400">{errors.customerPhone.message}</p>
             )}
           </div>
           <div>
-            <label htmlFor="checkout-email" className="mb-1 block text-sm text-white/60">
+            <label htmlFor="checkout-email" className="mb-1.5 block text-sm text-secondary">
               Email
             </label>
             <input
               id="checkout-email"
               {...register('customerEmail')}
               type="email"
-              className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+              className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
             />
             {errors.customerEmail && (
               <p className="mt-1 text-xs text-red-400">{errors.customerEmail.message}</p>
@@ -293,12 +293,19 @@ export default function CheckoutPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-white/60">Order Type</label>
-            <div className="flex gap-3">
+            <label className="mb-2 block text-sm text-secondary">Order Type</label>
+            <div className="grid grid-cols-2 gap-3">
               {(['DELIVERY', 'PICKUP'] as const).map((type) => (
-                <label key={type} className="flex items-center gap-2">
-                  <input type="radio" {...register('orderType')} value={type} />
-                  <span className="text-sm">{type === 'DELIVERY' ? 'Delivery' : 'Pickup'}</span>
+                <label
+                  key={type}
+                  className={`flex cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition ${
+                    orderType === type
+                      ? 'border-brand-gold bg-brand-gold/10 text-brand-gold'
+                      : 'border-brand-subtle bg-brand-card text-secondary hover:border-white/20'
+                  }`}
+                >
+                  <input type="radio" className="sr-only" {...register('orderType')} value={type} />
+                  {type === 'DELIVERY' ? 'Delivery' : 'Pickup'}
                 </label>
               ))}
             </div>
@@ -307,87 +314,92 @@ export default function CheckoutPage() {
           {orderType === 'DELIVERY' && (
             <>
               <div>
-                <label htmlFor="checkout-address" className="mb-1 block text-sm text-white/60">
+                <label htmlFor="checkout-address" className="mb-1.5 block text-sm text-secondary">
                   Delivery Address
                 </label>
                 <textarea
                   id="checkout-address"
                   {...register('deliveryAddress')}
                   rows={2}
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+                  className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
                 />
                 {errors.deliveryAddress && (
                   <p className="mt-1 text-xs text-red-400">{errors.deliveryAddress.message}</p>
                 )}
               </div>
               <div>
-                <label className="mb-1 block text-sm text-white/60">Delivery Instructions</label>
+                <label className="mb-1.5 block text-sm text-secondary">Delivery Instructions</label>
                 <input
                   {...register('deliveryInstructions')}
-                  className="w-full rounded-xl border border-white/10 bg-brand-dark-light px-4 py-3 outline-none focus:border-brand-gold"
+                  className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
                 />
               </div>
             </>
           )}
 
-          <div className="rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-4 py-3 text-sm text-white/80">
+          <div className="rounded-2xl border border-brand-gold/25 bg-brand-gold/10 px-4 py-4 text-sm">
             <p className="font-medium text-brand-gold">Payment: Bank transfer</p>
-            <p className="mt-1 text-white/60">
+            <p className="mt-1.5 leading-relaxed text-secondary">
               We’ll show the account details next. Your order is only sent to the kitchen after you
               tap “I have made payment”. You can close the payment screen to add more items first.
             </p>
           </div>
         </div>
 
-        <div className="h-fit rounded-2xl border border-white/10 bg-brand-dark-light p-6">
-          <h2 className="mb-4 font-semibold">Order Summary</h2>
-          <ul className="mb-4 space-y-3 text-sm">
+        <div className="h-fit rounded-3xl border border-brand-subtle bg-brand-card p-6 sm:sticky sm:top-24 sm:p-7">
+          <h2 className="mb-5 font-display text-xl font-semibold">Order Summary</h2>
+          <ul className="mb-5 space-y-4 text-sm">
             {activePacks.map((pack) => (
               <li key={pack.id}>
-                <p className="mb-1 font-medium text-brand-gold">{pack.name}</p>
-                <ul className="space-y-1 pl-2 text-white/80">
+                <p className="mb-1.5 font-medium text-brand-gold">{pack.name}</p>
+                <ul className="space-y-1.5 pl-2 text-secondary">
                   {pack.items.map((item) => (
                     <li key={item.id} className="flex justify-between gap-2">
                       <span>
                         {item.foodName} ({item.portionName}) ×{item.quantity}
                         {item.unitPrice === 0 ? ' · free' : ''}
                       </span>
-                      <span>{formatCurrency(item.unitPrice * item.quantity)}</span>
+                      <span className="text-white">{formatCurrency(item.unitPrice * item.quantity)}</span>
                     </li>
                   ))}
                 </ul>
               </li>
             ))}
           </ul>
-          <div className="space-y-2 border-t border-white/10 pt-4 text-sm">
+          <div className="space-y-2.5 border-t border-brand-subtle pt-4 text-sm">
             <div className="flex justify-between">
-              <span>Items subtotal</span>
+              <span className="text-secondary">Items subtotal</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
             {packFees > 0 && (
-              <div className="flex justify-between text-white/60">
+              <div className="flex justify-between text-secondary">
                 <span>Pack fees ({activePacks.length})</span>
                 <span>{formatCurrency(packFees)}</span>
               </div>
             )}
-            <div className="flex justify-between text-white/60">
+            <div className="flex justify-between text-secondary">
               <span>Tax</span>
               <span>{formatCurrency(tax)}</span>
             </div>
-            <div className="flex justify-between text-white/60">
+            <div className="flex justify-between text-secondary">
               <span>{orderType === 'DELIVERY' ? 'Delivery' : 'Delivery (pickup — free)'}</span>
               <span>{formatCurrency(deliveryFee)}</span>
             </div>
-            <div className="flex justify-between border-t border-white/10 pt-2 text-lg font-bold">
+            <div className="flex justify-between border-t border-brand-subtle pt-3 text-lg font-bold">
               <span>Total</span>
               <span className="text-brand-gold">{formatCurrency(total)}</span>
             </div>
           </div>
-          <button
-            type="submit"
-            className="mt-6 w-full rounded-full bg-brand-gold py-3 font-semibold text-white disabled:opacity-50"
-          >
+          <button type="submit" className="btn-primary btn-ripple mt-6 hidden w-full py-3.5 sm:flex">
             Continue to payment
+          </button>
+        </div>
+
+        {/* Sticky mobile pay CTA */}
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-subtle bg-brand-dark/95 p-4 backdrop-blur-xl sm:hidden lg:col-span-2">
+          <button type="submit" className="btn-primary btn-ripple flex w-full items-center justify-between py-3.5">
+            <span>Continue to payment</span>
+            <span>{formatCurrency(total)}</span>
           </button>
         </div>
       </form>

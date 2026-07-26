@@ -2,9 +2,10 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const SITE = 'https://www.ayfoodpalace.com';
-const DEFAULT_TITLE = 'Ay Food — Order Nigerian Meals Online | Ogijo, Ikorodu';
+const DEFAULT_TITLE =
+  'Ay Food | A.Y Food Mega Palace & A.Y Food Palace — Order Online | Ogijo';
 const DEFAULT_DESC =
-  'A.Y Food Mega Palace — authentic Nigerian cuisine in Ogijo, Ikorodu. Build your meal pack, order online for delivery or pickup. Omoleye bustop, Ikorodu–Shagamu Road.';
+  'Order from Ay Food (A.Y Food Mega Palace / A.Y Food Palace) in Ogijo — authentic Nigerian meals for delivery & pickup. Also known as Ay Mega Food Palace. Omoleye, Ikorodu–Shagamu Road.';
 
 type SeoEntry = { title: string; description: string; noindex?: boolean };
 
@@ -14,47 +15,51 @@ const SEO_BY_PATH: Record<string, SeoEntry> = {
     description: DEFAULT_DESC,
   },
   '/menu': {
-    title: 'Menu — Ay Food Mega Palace | Nigerian Dishes',
+    title: 'Menu — Ay Food Palace | A.Y Food Mega Palace Nigerian Dishes',
     description:
-      'Browse jollof, swallow, soups, proteins and sides from A.Y Food Mega Palace. Order online for delivery or pickup in Ogijo, Ikorodu.',
+      'Browse the Ay Food (A.Y Food Mega Palace) menu — jollof, swallow, soups, proteins and sides. Order online for delivery or pickup in Ogijo.',
   },
   '/build': {
-    title: 'Build Your Pack — Ay Food Mega Palace',
+    title: 'Build Your Pack — Ay Food | A.Y Food Mega Palace',
     description:
-      'Customize your Nigerian meal pack — swallow, meals, protein, sides and soups. Order from Ay Food in Ogijo, Ikorodu.',
+      'Customize your meal pack at Ay Food Palace — swallow, meals, protein, sides and soups. Order from A.Y Food Mega Palace in Ogijo.',
   },
   '/cart': {
     title: 'Your Cart — Ay Food',
     description: 'Review your Ay Food meal pack before checkout.',
+    noindex: true,
   },
   '/checkout': {
     title: 'Checkout — Ay Food',
-    description: 'Complete your Ay Food order for delivery or pickup in Ogijo, Ikorodu.',
+    description: 'Complete your Ay Food order for delivery or pickup in Ogijo.',
+    noindex: true,
   },
   '/track': {
-    title: 'Track Order — Ay Food',
-    description: 'Track your Ay Food Mega Palace order with your order number.',
+    title: 'Track Order — Ay Food Palace | A.Y Food Mega Palace',
+    description: 'Track your Ay Food / A.Y Food Mega Palace order with your order number.',
   },
   '/about': {
-    title: 'About Us — Ay Food Mega Palace | Ogijo, Ikorodu',
+    title: 'About Ay Food | A.Y Food Mega Palace & A.Y Food Palace | Ogijo',
     description:
-      'Learn about A.Y Food Mega Palace. Visit us at Omoleye bustop, Ogijo, Ikorodu–Shagamu Road, Lagos.',
+      'About Ay Food (A.Y Food Mega Palace), also listed as A.Y Food Palace on Google Maps. Visit Omoleye, Ogijo 121101. Order Nigerian meals online.',
   },
   '/faq': {
-    title: 'FAQ — Ay Food Mega Palace',
-    description: 'Frequently asked questions about ordering, delivery, and pickup at Ay Food.',
+    title: 'FAQ — Ay Food Palace | A.Y Food Mega Palace',
+    description:
+      'FAQ for Ay Food / A.Y Food Mega Palace — ordering, delivery, pickup, and payment in Ogijo.',
   },
   '/support': {
-    title: 'Support — Ay Food Mega Palace',
-    description: 'Contact Ay Food for order help, WhatsApp, phone, or email support.',
+    title: 'Contact Ay Food Palace | A.Y Food Mega Palace Support',
+    description:
+      'Contact Ay Food (A.Y Food Mega Palace / A.Y Food Palace) — phone, WhatsApp, and email. Omoleye, Ogijo.',
   },
   '/terms': {
-    title: 'Terms & Conditions — Ay Food',
-    description: 'Terms and conditions for ordering from A.Y Food Mega Palace.',
+    title: 'Terms & Conditions — Ay Food Mega Palace',
+    description: 'Terms and conditions for ordering from Ay Food / A.Y Food Mega Palace.',
   },
   '/refund': {
-    title: 'Refund Policy — Ay Food',
-    description: 'Refund and order policy for A.Y Food Mega Palace.',
+    title: 'Refund Policy — Ay Food Mega Palace',
+    description: 'Refund and order policy for Ay Food / A.Y Food Mega Palace.',
   },
 };
 
@@ -103,9 +108,11 @@ export function SeoManager() {
     upsertMeta('property', 'og:type', 'website');
     upsertMeta('property', 'og:url', `${SITE}${pathname === '/' ? '' : pathname}`);
     upsertMeta('property', 'og:site_name', 'Ay Food Mega Palace');
+    upsertMeta('property', 'og:image', `${SITE}/assets/hero.png`);
     upsertMeta('name', 'twitter:card', 'summary_large_image');
     upsertMeta('name', 'twitter:title', entry.title);
     upsertMeta('name', 'twitter:description', entry.description);
+    upsertMeta('name', 'twitter:image', `${SITE}/assets/hero.png`);
     upsertLink('canonical', `${SITE}${pathname === '/' ? '/' : pathname}`);
   }, [pathname]);
 

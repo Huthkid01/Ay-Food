@@ -30,6 +30,7 @@ import { useEffect, useState } from 'react';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { AdminThemeProvider, useAdminTheme } from '../contexts/AdminThemeContext';
 import { useAdminRealtime } from '../hooks/useAdminRealtime';
+import { BrandLogo } from '../components/ui/BrandLogo';
 import { cn } from '../utils/helpers';
 
 const navItemsBeforeContent = [
@@ -118,12 +119,12 @@ function AdminLayoutShell() {
   };
 
   const activeNavClass = isDark
-    ? 'bg-[#2d1a0f] text-orange-100 shadow-[inset_4px_0_0_0_#FF6B00]'
-    : 'bg-[#fff3eb] text-[#FF6B00] shadow-[inset_4px_0_0_0_#FF6B00]';
+    ? 'bg-[#2a1a12] text-orange-50 shadow-[inset_3px_0_0_0_var(--color-brand-gold)]'
+    : 'bg-[#fff4ec] text-brand-gold shadow-[inset_3px_0_0_0_var(--color-brand-gold)]';
 
   const idleNavClass = isDark
-    ? 'text-slate-400 hover:bg-[#2d1a0f]/50 hover:text-orange-100'
-    : 'text-slate-600 hover:bg-[#fff3eb] hover:text-[#FF6B00]';
+    ? 'text-slate-400 hover:bg-[#2a1a12]/60 hover:text-orange-50'
+    : 'text-slate-600 hover:bg-[#fff4ec] hover:text-brand-gold';
 
   const renderNavLink = (item: (typeof navItemsBeforeContent)[number]) => {
     const Icon = item.icon;
@@ -196,23 +197,19 @@ function AdminLayoutShell() {
             )}
           >
             <div className={cn(collapsed && 'lg:hidden')}>
-              <p className={cn('text-base font-bold', isDark ? 'text-white' : 'text-slate-900')}>
+              <Link to="/admin" className="block">
+                <BrandLogo size="sm" tone={isDark ? 'dark' : 'light'} />
+              </Link>
+              <p className="mt-2 text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
                 Admin Panel
               </p>
-              <Link to="/admin" className="mt-0.5 block text-sm text-slate-500">
-                AY FOOD
-              </Link>
             </div>
             <Link
               to="/admin"
-              className={cn(
-                'hidden items-center justify-center rounded-2xl border p-2',
-                isDark ? 'border-[#22324a] bg-[#081624]' : 'border-slate-200 bg-slate-100',
-                collapsed && 'lg:inline-flex',
-              )}
+              className={cn('hidden', collapsed && 'lg:inline-flex')}
               title="Ay Food"
             >
-              <UtensilsCrossed className="h-5 w-5 text-[#FF6B00]" />
+              <BrandLogo size="sm" showWordmark={false} />
             </Link>
           </div>
 
@@ -257,7 +254,7 @@ function AdminLayoutShell() {
               isDark ? 'border-[#18263b] bg-[#081624]' : 'border-slate-200 bg-slate-50',
             )}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF6B00] text-sm font-bold text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-gold text-sm font-bold text-white">
               {(user?.firstName?.[0] || 'A').toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -454,7 +451,7 @@ function AdminLayoutShell() {
             to="/"
             className={cn(
               'hidden text-xs sm:inline',
-              isDark ? 'text-slate-400 hover:text-[#FF6B00]' : 'text-slate-500 hover:text-[#FF6B00]',
+              isDark ? 'text-slate-400 hover:text-brand-gold' : 'text-slate-500 hover:text-brand-gold',
             )}
           >
             View site

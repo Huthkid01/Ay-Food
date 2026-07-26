@@ -36,37 +36,39 @@ export default function MenuPage() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="mb-2 font-display text-4xl font-bold">
+    <div className="site-container section-pad pt-10 sm:pt-12">
+      <h1 className="mb-3 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
         {menuPage.title} <span className="text-gradient">{menuPage.titleHighlight}</span>
       </h1>
-      <p className="mb-6 text-white/60">
+      <p className="mb-8 max-w-2xl text-secondary">
         {menuPage.subtitle} · {displayedFoods.length} items from the A.Y Food Mega Palace menu
       </p>
-      <div className="mb-6">
+      <div className="mb-8">
         <div className="relative w-full max-w-xl">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={18} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" size={18} />
           <input
             type="text"
             placeholder="Search for food items..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-brand-dark-light py-3 pl-10 pr-4 outline-none focus:border-brand-gold"
+            className="w-full rounded-2xl border border-brand-subtle bg-brand-card py-3.5 pl-11 pr-4 outline-none transition focus:border-brand-gold"
           />
         </div>
         {debouncedSearch && (
-          <p className="mt-2 text-sm text-white/60">
+          <p className="mt-2 text-sm text-secondary">
             {displayedFoods.length} item{displayedFoods.length !== 1 ? 's' : ''} found
           </p>
         )}
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-2">
+      <div className="mb-8 flex flex-wrap gap-2">
         <button
           onClick={() => setCategory('')}
           className={cn(
             'rounded-full px-4 py-2 text-sm font-medium transition',
-            !category ? 'bg-brand-gold text-white' : 'bg-brand-dark-light text-white/70 hover:text-brand-gold'
+            !category
+              ? 'bg-brand-gold text-white shadow-[0_8px_20px_rgb(249_115_22/0.25)]'
+              : 'bg-brand-card text-secondary hover:text-brand-gold',
           )}
         >
           All
@@ -78,8 +80,8 @@ export default function MenuPage() {
             className={cn(
               'rounded-full px-4 py-2 text-sm font-medium transition',
               category === cat.slug
-                ? 'bg-brand-gold text-white'
-                : 'bg-brand-dark-light text-white/70 hover:text-brand-gold'
+                ? 'bg-brand-gold text-white shadow-[0_8px_20px_rgb(249_115_22/0.25)]'
+                : 'bg-brand-card text-secondary hover:text-brand-gold',
             )}
           >
             {cat.name}
@@ -90,17 +92,17 @@ export default function MenuPage() {
       {isLoading ? (
         <div className="food-grid">
           {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="h-64 animate-pulse rounded-2xl bg-brand-dark-light" />
+            <div key={i} className="h-80 animate-pulse rounded-3xl bg-brand-card" />
           ))}
         </div>
       ) : displayedFoods.length === 0 ? (
-        <div className="py-16 text-center">
-          <h3 className="text-xl font-semibold">
+        <div className="py-20 text-center">
+          <h3 className="font-display text-2xl font-semibold">
             {catalog?.source === 'empty' && !search && !category
               ? 'Menu unavailable'
               : 'No items found'}
           </h3>
-          <p className="mt-2 text-white/60">
+          <p className="mt-2 text-secondary">
             {catalog?.source === 'empty' && !search && !category
               ? 'Please check back soon — dishes will appear once the kitchen menu is online.'
               : 'Try different keywords or browse our categories'}
@@ -111,7 +113,7 @@ export default function MenuPage() {
                 setSearch('');
                 setCategory('');
               }}
-              className="mt-4 rounded-full bg-brand-gold px-6 py-2 font-semibold text-white"
+              className="btn-primary btn-ripple mt-6"
             >
               Clear Filters
             </button>
