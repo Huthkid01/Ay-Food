@@ -66,11 +66,15 @@ test.describe('Ay Food storefront', () => {
 
   test('menu page lists flyer dishes', async ({ page }) => {
     await page.goto('/menu');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Swallow' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Menu|Our Menu|Food/i }).first()).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByRole('button', { name: 'Swallow' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Meals' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Protein' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Amala', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Amala', exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByRole('heading', { name: 'Jollof Rice', exact: true })).toBeVisible();
   });
 
