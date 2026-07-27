@@ -173,7 +173,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
       },
       {
         title: 'Secure Payment',
-        description: 'Pay by bank transfer, then confirm — your order goes straight to the kitchen',
+        description: 'Pay securely with Kora (card or bank) — get email confirmation and tracking',
       },
     ],
     popularHeading: 'Popular',
