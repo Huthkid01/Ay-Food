@@ -27,19 +27,19 @@ export default function AdminVisitorsPage() {
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
     queryKey: ['admin-visitor-stats'],
     queryFn: () => siteVisitService.getStats(),
-    refetchInterval: 15_000,
+    refetchInterval: 5_000,
   });
 
   const { data: active = [], isLoading: activeLoading } = useQuery({
     queryKey: ['admin-active-sessions'],
     queryFn: () => siteVisitService.getActiveSessions(),
-    refetchInterval: 15_000,
+    refetchInterval: 5_000,
   });
 
   const { data: recent = [], isLoading: recentLoading } = useQuery({
     queryKey: ['admin-recent-visits'],
     queryFn: () => siteVisitService.getRecentPageViews(80),
-    refetchInterval: 20_000,
+    refetchInterval: 5_000,
   });
 
   const clear = useMutation({
@@ -72,9 +72,8 @@ export default function AdminVisitorsPage() {
         <div>
           <h1 className="font-display text-3xl font-bold">Site Visits</h1>
           <p className="mt-1 text-sm text-white/50">
-            Live traffic · on site now = active in the last {SITE_ACTIVE_WINDOW_MINUTES} minutes.
-            IP is the visitor’s real public network address. City/region comes from that IP
-            (cross-checked across GeoIP providers) — not GPS street address.
+            Live traffic · updates in real time. Visits today = unique people (one per browser),
+            not every page they open. Admin browsing is not counted.
           </p>
         </div>
         <button
@@ -104,11 +103,13 @@ export default function AdminVisitorsPage() {
             label: 'Visits today',
             value: statsLoading ? '…' : stats?.visitsToday ?? 0,
             icon: Activity,
+            hint: '1 person = 1 visit',
           },
           {
-            label: 'Total sessions',
-            value: statsLoading ? '…' : stats?.totalSessions ?? 0,
+            label: 'Page views today',
+            value: statsLoading ? '…' : stats?.pageViewsToday ?? 0,
             icon: MapPin,
+            hint: 'Every page open',
           },
         ].map(({ label, value, icon: Icon, hint }) => (
           <div key={label} className="rounded-2xl border border-white/10 bg-brand-dark-light p-5">
@@ -161,7 +162,11 @@ export default function AdminVisitorsPage() {
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-brand-dark-light p-6">
-          <h2 className="mb-4 font-semibold">Recent page visits</h2>
+          <h2 className="mb-4 font-semibold">Recent page views</h2>
+          <p className="mb-3 text-xs text-white/40">
+            Same person opening Menu, Build, Track shows as separate rows here — still one visit
+            in Visits today.
+          </p>
           {recentLoading ? (
             <div className="h-32 animate-pulse rounded-xl bg-brand-dark" />
           ) : recent.length === 0 ? (

@@ -41,10 +41,12 @@ export function useAdminRealtime() {
         void queryClient.invalidateQueries({ queryKey: ['admin-visitor-stats'] });
         void queryClient.invalidateQueries({ queryKey: ['admin-active-sessions'] });
         void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+        void queryClient.invalidateQueries({ queryKey: ['admin-analytics'] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'site_page_views' }, () => {
         void queryClient.invalidateQueries({ queryKey: ['admin-visitor-stats'] });
         void queryClient.invalidateQueries({ queryKey: ['admin-recent-visits'] });
+        void queryClient.invalidateQueries({ queryKey: ['admin-analytics'] });
       })
       .subscribe();
 

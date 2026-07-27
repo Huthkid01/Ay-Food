@@ -39,6 +39,7 @@ export type SiteVisitorStats = {
   activeVisitors: number;
   activeGuests: number;
   visitsToday: number;
+  pageViewsToday: number;
   totalSessions: number;
 };
 
@@ -46,6 +47,7 @@ const emptyStats = (): SiteVisitorStats => ({
   activeVisitors: 0,
   activeGuests: 0,
   visitsToday: 0,
+  pageViewsToday: 0,
   totalSessions: 0,
 });
 
@@ -113,6 +115,7 @@ export const siteVisitService = {
       activeVisitors: Number(row.activeVisitors ?? 0),
       activeGuests: Number(row.activeGuests ?? 0),
       visitsToday: Number(row.visitsToday ?? 0),
+      pageViewsToday: Number(row.pageViewsToday ?? 0),
       totalSessions: Number(row.totalSessions ?? 0),
     };
   },
