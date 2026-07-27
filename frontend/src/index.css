@@ -230,14 +230,20 @@
   /* Masonry: pack cards into columns so shorter items don't leave row gaps */
   .food-grid {
     column-count: 2;
-    column-gap: 1rem;
+    column-gap: 1.25rem;
   }
 
-  .food-grid > * {
+  .food-grid > .food-card-slot {
     break-inside: avoid;
     -webkit-column-break-inside: avoid;
     page-break-inside: avoid;
-    margin-bottom: 1rem;
+    display: inline-block;
+    vertical-align: top;
+    width: 100%;
+    margin: 0 0 1.25rem;
+  }
+
+  .food-grid > .food-card-slot > .food-card {
     width: 100%;
   }
 
@@ -247,7 +253,7 @@
       column-gap: 1.5rem;
     }
 
-    .food-grid > * {
+    .food-grid > .food-card-slot {
       margin-bottom: 1.5rem;
     }
   }
@@ -257,7 +263,7 @@
       column-gap: 1.75rem;
     }
 
-    .food-grid > * {
+    .food-grid > .food-card-slot {
       margin-bottom: 1.75rem;
     }
   }
@@ -268,13 +274,15 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       grid-template-rows: masonry;
-      gap: 1rem;
-      column-count: auto;
-      column-gap: normal;
+      gap: 1.25rem;
+      column-count: unset;
+      column-gap: unset;
     }
 
-    .food-grid > * {
-      margin-bottom: 0;
+    .food-grid > .food-card-slot {
+      display: block;
+      width: auto;
+      margin: 0;
     }
 
     @media (min-width: 768px) {
@@ -296,25 +304,32 @@
       display: grid-lanes;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       grid-template-rows: none;
-      gap: 1rem;
-      column-count: auto;
-      column-gap: normal;
+      gap: 1.25rem;
+      row-gap: 1.25rem;
+      column-gap: 1.25rem;
+      column-count: unset;
     }
 
-    .food-grid > * {
-      margin-bottom: 0;
+    .food-grid > .food-card-slot {
+      display: block;
+      width: auto;
+      margin: 0;
     }
 
     @media (min-width: 768px) {
       .food-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 1.5rem;
+        row-gap: 1.5rem;
+        column-gap: 1.5rem;
       }
     }
 
     @media (min-width: 1024px) {
       .food-grid {
         gap: 1.75rem;
+        row-gap: 1.75rem;
+        column-gap: 1.75rem;
       }
     }
   }
