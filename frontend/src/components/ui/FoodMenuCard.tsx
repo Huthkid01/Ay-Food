@@ -3,7 +3,7 @@ import { Minus, Plus, Star } from 'lucide-react';
 import { FoodImage } from './FoodImage';
 import { FoodImageLightbox, FoodImageZoomHint } from './FoodImageLightbox';
 import { formatMenuPrice } from '../../data/nigerian-menu';
-import { formatCurrency } from '../../utils/helpers';
+import { cn, formatCurrency } from '../../utils/helpers';
 import { resolveFoodImage } from '../../utils/food-images';
 import type { Food } from '../../types';
 
@@ -82,30 +82,51 @@ export function FoodMenuCard({
           {food.name}
         </h3>
         {showDescription && food.description && (
-          <p className="mb-3 line-clamp-2 text-sm leading-relaxed text-secondary">
+          <p className="mb-2 line-clamp-2 text-sm leading-relaxed text-secondary">
             {food.description}
           </p>
         )}
+
+        {/* Custom size picker — native <select> truncates prices on mobile */}
         {multi && (
-          <select
-            value={selected?.id}
-            onChange={(e) => setPortionId(e.target.value)}
-            className="mb-3 w-full rounded-xl border border-brand-subtle bg-brand-dark px-3 py-2.5 text-sm outline-none transition focus:border-brand-gold"
-          >
-            {food.portions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.portion.name}
-                {` — ${formatCurrency(p.price)}`}
-              </option>
-            ))}
-          </select>
+          <div className="mb-2 space-y-1.5" role="listbox" aria-label="Choose size">
+            {food.portions.map((p) => {
+              const active = selected?.id === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => setPortionId(p.id)}
+                  className={cn(
+                    'flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-sm transition',
+                    active
+                      ? 'border-brand-gold bg-brand-gold/15 text-brand-gold'
+                      : 'border-brand-subtle bg-brand-dark text-white/85 hover:border-brand-gold/40',
+                  )}
+                >
+                  <span className="min-w-0 truncate font-medium">{p.portion.name}</span>
+                  <span className="shrink-0 whitespace-nowrap font-semibold tabular-nums">
+                    {formatCurrency(p.price)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         )}
 
-        <p className="mb-4 text-lg font-bold text-brand-gold">
+        <p
+          className={cn(
+            'text-lg font-bold tabular-nums text-brand-gold',
+            multi ? 'mb-3' : 'mb-3',
+          )}
+        >
           {multi && !selected ? formatMenuPrice(food.portions) : priceLabel}
         </p>
 
-        <div className="mt-auto space-y-3">
+        {/* No mt-auto — avoids huge empty gap on single-size cards in a tall grid row */}
+        <div className="space-y-3">
           <div className="flex items-center justify-center gap-4">
             <button
               type="button"

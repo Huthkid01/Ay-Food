@@ -16,43 +16,24 @@ function formatItems(order: WhatsAppOrderDetails): string {
     .join('\n');
 }
 
-function buildOwnerAlertFields(
-  order: WhatsAppOrderDetails,
-  opts: { formType: string; paymentStatus: string; messageLead: string },
-): Record<string, string> {
+/** Owner-facing FormSubmit fields only — no tracking URL or internal metadata. */
+function buildOwnerAlertFields(order: WhatsAppOrderDetails): Record<string, string> {
   const orderType = order.orderType === 'DELIVERY' ? 'Delivery' : 'Pickup';
   const address =
     order.orderType === 'DELIVERY'
       ? order.deliveryAddress?.trim() || '—'
-      : 'N/A (pickup)';
+      : 'Pickup (no delivery address)';
 
   return {
-    _subject: `Order paid: ${order.orderNumber}`,
+    _subject: `New paid order — ${order.orderNumber}`,
     _replyto: order.customerEmail?.trim() || '',
-    form_type: opts.formType,
-    order_number: order.orderNumber,
-    customer_name: order.customerName,
-    customer_phone: order.customerPhone,
-    customer_email: order.customerEmail?.trim() || '—',
+    name: order.customerName,
+    email: order.customerEmail?.trim() || '—',
+    phone: order.customerPhone,
     order_type: orderType,
-    delivery_address: address,
-    delivery_instructions: order.deliveryInstructions?.trim() || '—',
-    items: formatItems(order),
-    total: formatCurrency(order.total),
-    payment_status: opts.paymentStatus,
-    payment_provider: order.paymentProvider || '—',
-    message: [
-      opts.messageLead,
-      `Total: ${formatCurrency(order.total)}`,
-      `Name: ${order.customerName}`,
-      `Phone: ${order.customerPhone}`,
-      `Email: ${order.customerEmail?.trim() || '—'}`,
-      `Type: ${orderType}`,
-      `Address: ${address}`,
-      '',
-      'Items:',
-      formatItems(order),
-    ].join('\n'),
+    address,
+    amount_paid: formatCurrency(order.total),
+    order_items: formatItems(order),
   };
 }
 
@@ -60,24 +41,12 @@ function buildOwnerAlertFields(
 export async function notifyAdminPaymentConfirmed(
   order: WhatsAppOrderDetails,
 ): Promise<FormSubmitResult> {
-  return postFormSubmitBrowser(
-    buildOwnerAlertFields(order, {
-      formType: 'Order payment confirmed',
-      paymentStatus: 'Customer clicked “I have made payment”',
-      messageLead: `Customer confirmed bank transfer for order ${order.orderNumber}.`,
-    }),
-  );
+  return postFormSubmitBrowser(buildOwnerAlertFields(order));
 }
 
 /** Alert admin when customer pays with Kora and returns to the site. */
 export async function notifyAdminKoraPaid(
   order: WhatsAppOrderDetails,
 ): Promise<FormSubmitResult> {
-  return postFormSubmitBrowser(
-    buildOwnerAlertFields(order, {
-      formType: 'Customer order paid (Kora)',
-      paymentStatus: 'Paid via Kora',
-      messageLead: `Customer paid via Kora for order ${order.orderNumber}.`,
-    }),
-  );
+  return postFormSubmitBrowser(buildOwnerAlertFields(order));
 }

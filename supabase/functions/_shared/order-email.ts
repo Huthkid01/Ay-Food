@@ -31,12 +31,21 @@ type OrderEmailPayload = {
   items: OrderEmailItem[];
 };
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatNgn(amount: number) {
-  return `₦${Math.round(amount).toLocaleString('en-NG')}`;
+  return `NGN ${Math.round(amount).toLocaleString('en-NG')}`;
 }
 
 function formatItems(items: OrderEmailItem[]) {
-  if (!items.length) return '—';
+  if (!items.length) return '-';
   return items
     .map((item) => {
       const name = item.food_name || 'Item';
@@ -47,40 +56,32 @@ function formatItems(items: OrderEmailItem[]) {
       const pack = item.pack_name ? ` [${item.pack_name}]` : '';
       const qty = item.quantity ?? 1;
       const lineTotal = item.total_price ?? (item.unit_price ?? 0) * qty;
-      return `• ${name}${size}${pack} x${qty} — ${formatNgn(lineTotal)}`;
+      return `- ${name}${size}${pack} x${qty}: ${formatNgn(lineTotal)}`;
     })
     .join('\n');
 }
 
 function formatItemsHtml(items: OrderEmailItem[]) {
-  if (!items.length) return '<p>—</p>';
-  const rows = items
+  if (!items.length) {
+    return '<tr><td colspan="3" style="padding:10px 0;color:#555;">No items</td></tr>';
+  }
+  return items
     .map((item) => {
-      const name = item.food_name || 'Item';
+      const name = escapeHtml(item.food_name || 'Item');
       const size =
         item.portion_name && item.portion_name.toLowerCase() !== 'standard'
-          ? ` (${item.portion_name})`
+          ? ` (${escapeHtml(item.portion_name)})`
           : '';
-      const pack = item.pack_name ? ` [${item.pack_name}]` : '';
+      const pack = item.pack_name ? ` [${escapeHtml(item.pack_name)}]` : '';
       const qty = item.quantity ?? 1;
       const lineTotal = item.total_price ?? (item.unit_price ?? 0) * qty;
       return `<tr>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;">${name}${size}${pack}</td>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;text-align:center;">${qty}</td>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;">${formatNgn(lineTotal)}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #eeeeee;font-size:14px;color:#222222;">${name}${size}${pack}</td>
+        <td align="center" style="padding:10px 0;border-bottom:1px solid #eeeeee;font-size:14px;color:#222222;">${qty}</td>
+        <td align="right" style="padding:10px 0;border-bottom:1px solid #eeeeee;font-size:14px;color:#222222;">${formatNgn(lineTotal)}</td>
       </tr>`;
     })
     .join('');
-  return `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
-    <thead>
-      <tr>
-        <th align="left" style="padding:8px 0;border-bottom:2px solid #ddd;">Item</th>
-        <th style="padding:8px 0;border-bottom:2px solid #ddd;">Qty</th>
-        <th align="right" style="padding:8px 0;border-bottom:2px solid #ddd;">Price</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>`;
 }
 
 function getAppUrl() {
@@ -104,8 +105,16 @@ function getFromAddress() {
     Deno.env.get('SMTP_FROM_EMAIL')?.trim() ||
     Deno.env.get('SMTP_USER')?.trim() ||
     'contact@ayfoodpalace.com';
-  const name = Deno.env.get('SMTP_FROM_NAME')?.trim() || 'AyFoodPalace';
-  return { email, name, header: `${name} <${email}>` };
+  // Readable display name improves inbox trust (keep env override if set).
+  const name = Deno.env.get('SMTP_FROM_NAME')?.trim() || 'Ay Food Palace';
+  return { email, name, header: `"${name.replace(/"/g, '')}" <${email}>` };
+}
+
+function createMessageId(orderNumber: string, fromEmail: string) {
+  const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : 'ayfoodpalace.com';
+  const safeOrder = orderNumber.replace(/[^a-zA-Z0-9-]/g, '').slice(0, 24) || 'order';
+  const stamp = `${Date.now()}.${Math.random().toString(36).slice(2, 10)}`;
+  return `<${safeOrder}.${stamp}@${domain}>`;
 }
 
 function createSmtpTransport() {
@@ -139,49 +148,115 @@ function buildCustomerEmail(order: OrderEmailPayload) {
   const itemsText = formatItems(order.items);
   const itemsHtml = formatItemsHtml(order.items);
   const orderType = order.order_type === 'DELIVERY' ? 'Delivery' : 'Pickup';
+  const customerName = (order.customer_name || 'there').trim() || 'there';
+  const safeName = escapeHtml(customerName);
+  const safeOrder = escapeHtml(order.order_number);
+  const addressLine =
+    order.order_type === 'DELIVERY' && order.delivery_address?.trim()
+      ? `Delivery address: ${order.delivery_address.trim()}`
+      : null;
+  const safeAddress = addressLine ? escapeHtml(addressLine) : null;
+
+  // Calm transactional subject — avoids promo / spammy wording.
+  const subject = `Your Ay Food Palace order ${order.order_number}`;
 
   const text = [
-    `Hi ${order.customer_name},`,
+    `Hi ${customerName},`,
     '',
-    'Thank you for your order at Ay Food Palace!',
+    'Your order at Ay Food Palace is confirmed. Payment was received successfully.',
     '',
-    "We've received your payment and your order is confirmed.",
+    `Order number: ${order.order_number}`,
+    `Order type: ${orderType}`,
+    addressLine,
+    `Track your order: ${trackUrl}`,
     '',
-    `Tracking number: ${order.order_number}`,
-    `Track your order anytime: ${trackUrl}`,
-    '',
-    'Your items:',
+    'Order summary:',
     itemsText,
     '',
-    `Total paid: ${formatNgn(order.total)}`,
-    `Order type: ${orderType}`,
+    `Total: ${formatNgn(order.total)}`,
     '',
-    'If you have any questions, reply to this email or chat with us on the website.',
+    'Need help? Reply to this email or visit https://www.ayfoodpalace.com',
     '',
-    '— AyFoodPalace',
-  ].join('\n');
+    'Ay Food Palace',
+    'Omoleye, Ogijo, Ogun State, Nigeria',
+    'contact@ayfoodpalace.com',
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
 
-  const html = `
-  <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111;line-height:1.5;">
-    <h1 style="font-size:22px;margin:0 0 12px;">Thank you for your order!</h1>
-    <p style="margin:0 0 16px;">Hi ${order.customer_name}, we've received your payment and your order at <strong>Ay Food Palace</strong> is confirmed.</p>
-    <p style="margin:0 0 8px;"><strong>Tracking number:</strong> ${order.order_number}</p>
-    <p style="margin:0 0 20px;"><a href="${trackUrl}" style="color:#f97316;">Track your order</a></p>
-    <h2 style="font-size:16px;margin:0 0 8px;">Your items</h2>
-    ${itemsHtml}
-    <p style="margin:16px 0 0;"><strong>Total paid:</strong> ${formatNgn(order.total)}</p>
-    <p style="margin:4px 0 0;"><strong>Order type:</strong> ${orderType}</p>
-    <p style="margin:24px 0 0;color:#555;font-size:13px;">Questions? Reply to this email or chat with us on <a href="${appUrl}" style="color:#f97316;">ayfoodpalace.com</a>.</p>
-  </div>`;
+  // Simple table layout + multipart text twin — better inbox placement than flashy HTML.
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeOrder}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f6f6f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f6f6f6;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background-color:#ffffff;border:1px solid #e8e8e8;">
+          <tr>
+            <td style="padding:24px 24px 8px 24px;font-family:Arial,Helvetica,sans-serif;font-size:20px;line-height:1.4;color:#111111;font-weight:bold;">
+              Order confirmed
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 16px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#333333;">
+              Hi ${safeName}, your order at Ay Food Palace is confirmed. Payment was received successfully.
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 16px 24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#333333;">
+              <strong>Order number:</strong> ${safeOrder}<br>
+              <strong>Order type:</strong> ${orderType}<br>
+              ${safeAddress ? `${safeAddress}<br>` : ''}
+              <a href="${trackUrl}" style="color:#c2410c;text-decoration:underline;">Track your order</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 24px 4px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.4;color:#111111;font-weight:bold;">
+              Order summary
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 8px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
+                <tr>
+                  <td style="padding:8px 0;border-bottom:2px solid #dddddd;font-size:12px;color:#666666;">Item</td>
+                  <td align="center" style="padding:8px 0;border-bottom:2px solid #dddddd;font-size:12px;color:#666666;">Qty</td>
+                  <td align="right" style="padding:8px 0;border-bottom:2px solid #dddddd;font-size:12px;color:#666666;">Amount</td>
+                </tr>
+                ${itemsHtml}
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 24px 24px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111111;">
+              <strong>Total:</strong> ${formatNgn(order.total)}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 24px 24px 24px;border-top:1px solid #eeeeee;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#666666;">
+              Need help? Reply to this email or visit
+              <a href="${appUrl}" style="color:#c2410c;text-decoration:underline;">ayfoodpalace.com</a>.<br><br>
+              Ay Food Palace<br>
+              Omoleye, Ogijo, Ogun State, Nigeria<br>
+              contact@ayfoodpalace.com
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
-  return {
-    subject: `Thank you for your order — ${order.order_number}`,
-    text,
-    html,
-  };
+  return { subject, text, html, trackUrl };
 }
 
-/** Customer thank-you + order summary (Truehost SMTP). */
+/** Customer thank-you + order summary (Truehost SMTP, inbox-friendly). */
 async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> {
   const customerEmail = order.customer_email?.trim();
   if (!customerEmail) {
@@ -191,6 +266,7 @@ async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> 
 
   const content = buildCustomerEmail(order);
   const from = getFromAddress();
+  const messageId = createMessageId(order.order_number, from.email);
 
   try {
     const transporter = createSmtpTransport();
@@ -201,6 +277,18 @@ async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> 
       subject: content.subject,
       text: content.text,
       html: content.html,
+      messageId,
+      priority: 'normal',
+      // Helps filters treat this as a receipt, not marketing.
+      headers: {
+        'Auto-Submitted': 'auto-generated',
+        'X-Auto-Response-Suppress': 'All',
+        'X-Entity-Ref-ID': order.order_number,
+        'List-Unsubscribe': `<mailto:${from.email}?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      // Prefer quoted-printable for cleaner MIME / spam scores.
+      textEncoding: 'quoted-printable',
     });
     return true;
   } catch (err) {
@@ -209,17 +297,16 @@ async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> 
   }
 }
 
-/** Owner / kitchen alert via FormSubmit AJAX (no redirect). */
+/** Owner / kitchen alert via FormSubmit AJAX — kitchen fields only (no tracking URL). */
 async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boolean> {
   const ownerEmail = getOwnerInbox();
   const appUrl = getAppUrl();
-  const trackUrl = `${appUrl}/track?order=${encodeURIComponent(order.order_number)}`;
   const itemsText = formatItems(order.items);
   const orderType = order.order_type === 'DELIVERY' ? 'Delivery' : 'Pickup';
   const address =
     order.order_type === 'DELIVERY'
       ? order.delivery_address?.trim() || '—'
-      : 'N/A (pickup)';
+      : 'Pickup (no delivery address)';
 
   try {
     const res = await fetch(`https://formsubmit.co/ajax/${ownerEmail}`, {
@@ -231,31 +318,17 @@ async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boole
         Referer: `${appUrl}/`,
       },
       body: JSON.stringify({
-        _subject: `Order paid: ${order.order_number}`,
+        _subject: `New paid order — ${order.order_number}`,
         _template: 'table',
         _captcha: 'false',
         _replyto: order.customer_email,
         name: order.customer_name,
         email: order.customer_email,
-        form_type: 'Customer order paid (Kora)',
-        order_number: order.order_number,
-        customer_name: order.customer_name,
-        customer_phone: order.customer_phone,
-        customer_email: order.customer_email,
+        phone: order.customer_phone,
         order_type: orderType,
-        delivery_address: address,
-        items: itemsText,
-        total: formatNgn(order.total),
-        tracking_url: trackUrl,
-        payment_status: 'Paid via Kora',
-        message: [
-          `Customer paid for order ${order.order_number}.`,
-          `Total: ${formatNgn(order.total)}`,
-          `Name: ${order.customer_name}`,
-          `Phone: ${order.customer_phone}`,
-          `Type: ${orderType}`,
-          `Track: ${trackUrl}`,
-        ].join('\n'),
+        address,
+        amount_paid: formatNgn(order.total),
+        order_items: itemsText,
       }),
     });
 
