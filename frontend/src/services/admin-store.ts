@@ -51,6 +51,12 @@ export type AdminOrder = {
   deliveryAddress?: string;
   createdAt: string;
   items: AdminOrderItem[];
+  /** True when payments.status = COMPLETED (Kora / transfer paid). */
+  paymentPaid?: boolean;
+  paymentStatus?: string;
+  paymentProvider?: string;
+  paymentAmount?: number;
+  paymentReference?: string;
 };
 
 export type AdminCategory = {

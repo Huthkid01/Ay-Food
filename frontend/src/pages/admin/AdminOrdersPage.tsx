@@ -49,6 +49,30 @@ function statusColor(status: string) {
   }
 }
 
+function paymentLabel(order: AdminOrder) {
+  if (order.paymentPaid) return 'Paid';
+  if (order.paymentStatus === 'PROCESSING' || order.paymentStatus === 'PENDING') {
+    return 'Awaiting payment';
+  }
+  if (order.paymentStatus === 'FAILED') return 'Payment failed';
+  if (order.paymentStatus === 'REFUNDED') return 'Refunded';
+  return 'Unpaid';
+}
+
+function paymentColor(order: AdminOrder) {
+  if (order.paymentPaid) return 'bg-brand-green/20 text-brand-green';
+  if (order.paymentStatus === 'FAILED') return 'bg-red-500/20 text-red-300';
+  if (order.paymentStatus === 'REFUNDED') return 'bg-white/10 text-white/50';
+  return 'bg-amber-500/20 text-amber-200';
+}
+
+function paymentProviderLabel(provider?: string) {
+  if (!provider) return null;
+  if (provider.toUpperCase() === 'KORA') return 'Kora';
+  if (provider.toUpperCase() === 'CASH') return 'Cash / transfer';
+  return provider;
+}
+
 export default function AdminOrdersPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -110,7 +134,7 @@ export default function AdminOrdersPage() {
         <div>
           <h1 className="font-display text-3xl font-bold">Orders</h1>
           <p className="mt-1 text-sm text-white/50">
-            Live from database — updates when customers confirm payment
+            Live from database — paid Kora orders show as Paid
           </p>
         </div>
         <button
@@ -132,12 +156,13 @@ export default function AdminOrdersPage() {
       <div className="space-y-3">
         {orders.length === 0 && !error && (
           <p className="rounded-2xl border border-white/10 bg-brand-dark-light p-8 text-center text-white/50">
-            No orders yet. When a customer taps “I have made payment”, the order appears here.
+            No orders yet. When a customer pays with Kora, the order appears here as Paid.
           </p>
         )}
 
         {orders.map((order: AdminOrder) => {
           const open = expandedId === order.id;
+          const payProvider = paymentProviderLabel(order.paymentProvider);
           return (
             <div
               key={order.id}
@@ -154,6 +179,14 @@ export default function AdminOrdersPage() {
                     <span
                       className={cn(
                         'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                        paymentColor(order),
+                      )}
+                    >
+                      {paymentLabel(order)}
+                    </span>
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-[11px] font-medium',
                         statusColor(order.status),
                       )}
                     >
@@ -162,6 +195,7 @@ export default function AdminOrdersPage() {
                   </div>
                   <p className="mt-1 truncate text-sm text-white/50">
                     {order.customerName} · {order.orderType} · {formatCurrency(order.total)}
+                    {payProvider ? ` · ${payProvider}` : ''}
                   </p>
                   <p className="mt-0.5 text-xs text-white/35">{formatOrderTime(order.createdAt)}</p>
                 </div>
@@ -175,6 +209,21 @@ export default function AdminOrdersPage() {
                     <p>Email: {order.customerEmail}</p>
                     {order.deliveryAddress && (
                       <p className="sm:col-span-2">Address: {order.deliveryAddress}</p>
+                    )}
+                    <p>
+                      Payment:{' '}
+                      <span className={order.paymentPaid ? 'text-brand-green' : 'text-amber-200'}>
+                        {paymentLabel(order)}
+                      </span>
+                      {payProvider ? ` (${payProvider})` : ''}
+                    </p>
+                    {order.paymentAmount != null && (
+                      <p>Charged: {formatCurrency(order.paymentAmount)}</p>
+                    )}
+                    {order.paymentReference && (
+                      <p className="sm:col-span-2 break-all text-xs text-white/45">
+                        Ref: {order.paymentReference}
+                      </p>
                     )}
                   </div>
 
@@ -193,7 +242,7 @@ export default function AdminOrdersPage() {
                     ))}
                   </ul>
 
-                  <label className="mb-1 block text-xs text-white/50">Update status</label>
+                  <label className="mb-1 block text-xs text-white/50">Update kitchen status</label>
                   <select
                     value={order.status}
                     onChange={(e) =>

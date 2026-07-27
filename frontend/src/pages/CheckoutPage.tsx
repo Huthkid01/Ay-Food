@@ -9,7 +9,9 @@ import { useCart } from '../contexts/CartContext';
 import { useSiteContentData } from '../hooks/useSiteContent';
 import { formatCurrency } from '../utils/helpers';
 import { openOrderOnWhatsApp, type WhatsAppOrderDetails } from '../utils/whatsapp-order';
+import { getKoraChargeNgn, getKoraProcessingFeeNgn } from '../utils/kora-fees';
 import { PaymentTransferModal } from '../components/checkout/PaymentTransferModal';
+import { KoraPaymentConfirmModal } from '../components/checkout/KoraPaymentConfirmModal';
 import { useToast } from '../components/ui/Toast';
 import {
   geolocationErrorMessage,
@@ -66,6 +68,8 @@ export default function CheckoutPage() {
   const items = getFlattenedItems();
   const [completed, setCompleted] = useState<CompletedOrder | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingForm, setPendingForm] = useState<CheckoutForm | null>(null);
   const [locating, setLocating] = useState(false);
   const [mapsUrl, setMapsUrl] = useState<string | null>(null);
   const [locationBlocked, setLocationBlocked] = useState(false);
@@ -89,6 +93,8 @@ export default function CheckoutPage() {
   const orderType = watch('orderType');
   const deliveryFee = orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
   const total = taxable + tax + deliveryFee;
+  const processingFee = getKoraProcessingFeeNgn(total);
+  const chargeTotal = getKoraChargeNgn(total);
 
   useEffect(() => {
     const kora = searchParams.get('kora');
@@ -223,6 +229,8 @@ export default function CheckoutPage() {
       return checkout;
     },
     onSuccess: (checkout) => {
+      setConfirmOpen(false);
+      setPendingForm(null);
       window.location.assign(checkout.checkoutUrl);
     },
     onError: (err) => {
@@ -232,6 +240,16 @@ export default function CheckoutPage() {
       );
     },
   });
+
+  function openPaymentConfirm(form: CheckoutForm) {
+    setPendingForm(form);
+    setConfirmOpen(true);
+  }
+
+  function handleConfirmPayment() {
+    if (!pendingForm || payWithKora.isPending) return;
+    payWithKora.mutate(pendingForm);
+  }
 
   function handleContinueWhatsApp() {
     if (!completed) return;
@@ -303,7 +321,7 @@ export default function CheckoutPage() {
       </h1>
 
       <form
-        onSubmit={handleSubmit((d) => payWithKora.mutate(d))}
+        onSubmit={handleSubmit((d) => openPaymentConfirm(d))}
         className="grid gap-8 lg:grid-cols-2 lg:gap-10"
       >
         <div className="space-y-5">
@@ -429,8 +447,8 @@ export default function CheckoutPage() {
           <div className="rounded-2xl border border-brand-gold/25 bg-brand-gold/10 px-4 py-4 text-sm">
             <p className="font-medium text-brand-gold">Payment: Kora (card / bank)</p>
             <p className="mt-1.5 leading-relaxed text-secondary">
-              You’ll be redirected to Kora’s secure checkout. After payment you’ll return here with
-              your tracking number — and get a thank-you email with your order details.
+              You’ll choose card or bank transfer on Kora’s secure checkout. A small processing fee is
+              added so the restaurant receives your full order amount after Kora’s charges.
             </p>
           </div>
         </div>
@@ -476,9 +494,17 @@ export default function CheckoutPage() {
               <span>{orderType === 'DELIVERY' ? 'Delivery' : 'Delivery (pickup — free)'}</span>
               <span>{formatCurrency(deliveryFee)}</span>
             </div>
+            <div className="flex justify-between text-secondary">
+              <span>Order total</span>
+              <span>{formatCurrency(total)}</span>
+            </div>
+            <div className="flex justify-between text-secondary">
+              <span>Processing fee</span>
+              <span>{formatCurrency(processingFee)}</span>
+            </div>
             <div className="flex justify-between border-t border-brand-subtle pt-3 text-lg font-bold">
-              <span>Total</span>
-              <span className="text-brand-gold">{formatCurrency(total)}</span>
+              <span>You pay</span>
+              <span className="text-brand-gold">{formatCurrency(chargeTotal)}</span>
             </div>
           </div>
           <button
@@ -501,7 +527,7 @@ export default function CheckoutPage() {
               <span className="block text-sm font-semibold text-white">
                 {payWithKora.isPending ? 'Starting Kora…' : 'Pay with Kora'}
               </span>
-              <span className="block text-xs text-secondary">{formatCurrency(total)}</span>
+              <span className="block text-xs text-secondary">{formatCurrency(chargeTotal)}</span>
             </span>
             <span className="shrink-0 rounded-xl bg-brand-gold px-3 py-2 text-xs font-bold text-white">
               Pay
@@ -509,6 +535,20 @@ export default function CheckoutPage() {
           </button>
         </div>
       </form>
+
+      <KoraPaymentConfirmModal
+        open={confirmOpen}
+        orderTotal={total}
+        processingFee={processingFee}
+        chargeTotal={chargeTotal}
+        submitting={payWithKora.isPending}
+        onConfirm={handleConfirmPayment}
+        onClose={() => {
+          if (payWithKora.isPending) return;
+          setConfirmOpen(false);
+          setPendingForm(null);
+        }}
+      />
     </div>
   );
 }

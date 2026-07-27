@@ -42,6 +42,11 @@ type DbOrderRow = {
   delivery_address?: string | null;
   delivery_instructions?: string | null;
   created_at: string;
+  payment_status?: string | null;
+  payment_provider?: string | null;
+  payment_amount?: number | null;
+  payment_reference?: string | null;
+  payment_paid?: boolean | null;
   order_items?: Array<{
     id: string;
     food_name: string;
@@ -68,6 +73,12 @@ function mapItems(rows?: DbOrderRow['order_items']): AdminOrderItem[] {
 }
 
 export function mapDbOrder(row: DbOrderRow): AdminOrder {
+  const paymentStatus = row.payment_status ? String(row.payment_status) : undefined;
+  const paymentPaid =
+    typeof row.payment_paid === 'boolean'
+      ? row.payment_paid
+      : paymentStatus === 'COMPLETED';
+
   return {
     id: row.id,
     orderNumber: row.order_number,
@@ -84,6 +95,14 @@ export function mapDbOrder(row: DbOrderRow): AdminOrder {
     deliveryAddress: row.delivery_address ?? undefined,
     createdAt: row.created_at,
     items: mapItems(row.order_items),
+    paymentPaid,
+    paymentStatus,
+    paymentProvider: row.payment_provider ? String(row.payment_provider) : undefined,
+    paymentAmount:
+      row.payment_amount != null && Number.isFinite(Number(row.payment_amount))
+        ? Number(row.payment_amount)
+        : undefined,
+    paymentReference: row.payment_reference ? String(row.payment_reference) : undefined,
   };
 }
 

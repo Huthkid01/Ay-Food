@@ -174,7 +174,10 @@ export default function AdminDashboardPage() {
               </div>
               <div className="text-right">
                 <p className="text-brand-gold">{formatCurrency(order.total)}</p>
-                <p className="text-xs text-white/40">{order.status.replaceAll('_', ' ')}</p>
+                <p className="text-xs text-white/40">
+                  {order.paymentPaid ? 'Paid' : 'Awaiting payment'} ·{' '}
+                  {order.status.replaceAll('_', ' ')}
+                </p>
               </div>
             </div>
           ))}

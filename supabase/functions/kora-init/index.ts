@@ -7,6 +7,7 @@ import {
   resolveAppUrl,
   type KoraInitializeResponse,
 } from '../_shared/kora-payment.ts';
+import { getKoraChargeNgn, getKoraProcessingFeeNgn } from '../_shared/kora-fees.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -69,17 +70,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    const amountNgn = Math.round(Number(payment.amount || order.total));
-    if (!Number.isFinite(amountNgn) || amountNgn <= 0) {
+    const orderTotalNgn = Math.round(Number(order.total));
+    if (!Number.isFinite(orderTotalNgn) || orderTotalNgn <= 0) {
       return jsonResponse({ error: 'Invalid order amount' }, 400);
     }
+
+    const processingFeeNgn = getKoraProcessingFeeNgn(orderTotalNgn);
+    const chargeAmountNgn = getKoraChargeNgn(orderTotalNgn);
 
     // Prefer existing pending reference; otherwise mint a new one
     let reference = String(payment.reference || '').trim();
     if (!reference.startsWith('KORA-')) {
       reference = createKoraMerchantReference();
-      await admin.from('payments').update({ reference }).eq('id', payment.id);
     }
+
+    await admin
+      .from('payments')
+      .update({
+        reference,
+        amount: chargeAmountNgn,
+        metadata: {
+          source: 'ay-food-checkout',
+          order_total_ngn: orderTotalNgn,
+          processing_fee_ngn: processingFeeNgn,
+          charge_amount_ngn: chargeAmountNgn,
+        },
+      })
+      .eq('id', payment.id);
 
     const appUrl = resolveAppUrl(req);
     const redirectUrl = `${appUrl}/checkout?kora=return&reference=${encodeURIComponent(reference)}`;
@@ -92,7 +109,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        amount: amountNgn,
+        amount: chargeAmountNgn,
         currency: 'NGN',
         reference,
         redirect_url: redirectUrl,
@@ -107,6 +124,8 @@ Deno.serve(async (req) => {
           source: 'ay-food-checkout',
           order_number: order.order_number,
           order_id: order.id,
+          order_total_ngn: String(orderTotalNgn),
+          processing_fee_ngn: String(processingFeeNgn),
         },
       }),
     });
@@ -139,6 +158,9 @@ Deno.serve(async (req) => {
           source: 'ay-food-checkout',
           checkout_url: initPayload.data.checkout_url,
           order_number: order.order_number,
+          order_total_ngn: orderTotalNgn,
+          processing_fee_ngn: processingFeeNgn,
+          charge_amount_ngn: chargeAmountNgn,
         },
       })
       .eq('id', payment.id);
@@ -148,7 +170,9 @@ Deno.serve(async (req) => {
       reference,
       checkoutUrl: initPayload.data.checkout_url,
       orderNumber: order.order_number,
-      amount: amountNgn,
+      amount: chargeAmountNgn,
+      orderTotal: orderTotalNgn,
+      processingFee: processingFeeNgn,
     });
   } catch (err) {
     return jsonResponse(
