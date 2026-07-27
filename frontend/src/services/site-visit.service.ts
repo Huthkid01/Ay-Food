@@ -17,6 +17,7 @@ export type SiteSession = {
   country: string | null;
   region: string | null;
   city: string | null;
+  ip_address: string | null;
   first_seen_at: string;
   last_seen_at: string;
   page_views: number;
@@ -30,6 +31,7 @@ export type SitePageView = {
   country: string | null;
   region: string | null;
   city: string | null;
+  ip_address: string | null;
   created_at: string;
 };
 
@@ -76,6 +78,7 @@ export const siteVisitService = {
         p_region: location.region,
         p_city: location.city,
         p_heartbeat: heartbeat,
+        p_ip_address: location.ip,
       });
       if (error) {
         console.warn('[site-visit]', error.message);

@@ -2,17 +2,25 @@ export type VisitorLocation = {
   country: string | null;
   region: string | null;
   city: string | null;
+  /** Visitor's public IP address (exact network identity) */
+  ip: string | null;
   /** How the location was resolved — for debugging / admin confidence */
-  source?: 'gps' | 'ip' | null;
+  source?: 'ip' | null;
 };
 
-const CACHE_KEY = 'ay-food-visitor-location-v3';
-const EMPTY: VisitorLocation = { country: null, region: null, city: null, source: null };
+const CACHE_KEY = 'ay-food-visitor-location-v4';
+const EMPTY: VisitorLocation = {
+  country: null,
+  region: null,
+  city: null,
+  ip: null,
+  source: null,
+};
 
 type Cached = VisitorLocation & { resolved: true };
 
 function hasLocation(loc: VisitorLocation): boolean {
-  return Boolean(loc.country || loc.region || loc.city);
+  return Boolean(loc.country || loc.region || loc.city || loc.ip);
 }
 
 function stripCache(cached: Cached): VisitorLocation {
@@ -25,7 +33,7 @@ function readCache(): Cached | null {
     const cached = sessionStorage.getItem(CACHE_KEY);
     if (!cached) return null;
     const parsed = JSON.parse(cached) as Cached;
-    if (parsed?.resolved) return parsed;
+    if (parsed?.resolved && typeof parsed.ip === 'string' && parsed.ip) return parsed;
     return null;
   } catch {
     return null;
@@ -41,17 +49,27 @@ function writeCache(location: VisitorLocation) {
   }
 }
 
+function normalizeIp(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const ip = value.trim();
+  if (!ip || ip.length > 64) return null;
+  // Basic IPv4 / IPv6 sanity (avoid storing junk)
+  if (!/^[\d.:a-fA-F]+$/.test(ip)) return null;
+  return ip;
+}
+
 async function fetchJson(url: string, timeoutMs = 5000): Promise<unknown> {
   const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`location failed (${res.status})`);
   return res.json();
 }
 
-/** Real public IP → approximate city / region / country. */
+/** Real public IP → city / region / country + the exact IP string. */
 async function resolveFromIp(): Promise<VisitorLocation> {
-  // 1) geojs — reliable CORS + free
+  // 1) geojs — returns the visitor's public IP + geo
   try {
     const data = (await fetchJson('https://get.geojs.io/v1/ip/geo.json')) as {
+      ip?: string;
       country?: string;
       region?: string;
       city?: string;
@@ -60,6 +78,7 @@ async function resolveFromIp(): Promise<VisitorLocation> {
       country: data.country || null,
       region: data.region || null,
       city: data.city || null,
+      ip: normalizeIp(data.ip),
       source: 'ip',
     };
     if (hasLocation(location)) return location;
@@ -71,6 +90,7 @@ async function resolveFromIp(): Promise<VisitorLocation> {
   try {
     const data = (await fetchJson('https://ipwho.is/')) as {
       success?: boolean;
+      ip?: string;
       country?: string;
       region?: string;
       city?: string;
@@ -80,6 +100,7 @@ async function resolveFromIp(): Promise<VisitorLocation> {
         country: data.country ?? null,
         region: data.region ?? null,
         city: data.city ?? null,
+        ip: normalizeIp(data.ip),
         source: 'ip',
       };
       if (hasLocation(location)) return location;
@@ -92,6 +113,7 @@ async function resolveFromIp(): Promise<VisitorLocation> {
   try {
     const data = (await fetchJson('https://ipapi.co/json/')) as {
       error?: boolean;
+      ip?: string;
       country_name?: string;
       region?: string;
       city?: string;
@@ -101,6 +123,7 @@ async function resolveFromIp(): Promise<VisitorLocation> {
         country: data.country_name ?? null,
         region: data.region ?? null,
         city: data.city ?? null,
+        ip: normalizeIp(data.ip),
         source: 'ip',
       };
       if (hasLocation(location)) return location;
@@ -113,9 +136,8 @@ async function resolveFromIp(): Promise<VisitorLocation> {
 }
 
 /**
- * Resolve the visitor’s approximate location for analytics.
- * Uses IP only — never asks for GPS (that prompt is reserved for checkout
- * “Use current location”, so a Deny here doesn’t lock delivery forever).
+ * Resolve the visitor’s public IP + approximate place for analytics.
+ * Uses IP lookup only — never asks for GPS.
  */
 export async function getVisitorLocation(): Promise<VisitorLocation> {
   const cached = readCache();
@@ -129,11 +151,16 @@ export async function getVisitorLocation(): Promise<VisitorLocation> {
   return ip;
 }
 
-/** Display label for admin — city, region, country (or Unknown). */
+/** Display label for admin — IP first, then city / region / country. */
 export function formatVisitorLocation(row: {
+  ip_address?: string | null;
   city?: string | null;
   region?: string | null;
   country?: string | null;
 }): string {
-  return [row.city, row.region, row.country].filter(Boolean).join(', ') || 'Unknown';
+  const place = [row.city, row.region, row.country].filter(Boolean).join(', ');
+  const ip = row.ip_address?.trim();
+  if (ip && place) return `${ip} · ${place}`;
+  if (ip) return ip;
+  return place || 'Unknown';
 }

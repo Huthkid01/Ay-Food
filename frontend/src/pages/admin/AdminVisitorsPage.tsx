@@ -73,7 +73,7 @@ export default function AdminVisitorsPage() {
           <h1 className="font-display text-3xl font-bold">Site Visits</h1>
           <p className="mt-1 text-sm text-white/50">
             Live traffic · on site now = active in the last {SITE_ACTIVE_WINDOW_MINUTES} minutes.
-            Location uses the visitor’s browser GPS (if allowed) or their real IP address.
+            Each visit shows the visitor’s public IP plus city / region from that IP.
           </p>
         </div>
         <button
@@ -140,8 +140,12 @@ export default function AdminVisitorsPage() {
                         <span className="ml-2 text-xs text-brand-green">● live</span>
                       </p>
                       <p className="truncate text-white/50">{s.last_path}</p>
+                      {s.ip_address ? (
+                        <p className="mt-1 font-mono text-xs text-brand-gold">{s.ip_address}</p>
+                      ) : null}
                       <p className="mt-1 flex items-center gap-1 text-xs text-white/35">
-                        <MapPin size={12} /> {formatVisitorLocation(s)}
+                        <MapPin size={12} />{' '}
+                        {[s.city, s.region, s.country].filter(Boolean).join(', ') || 'Location unknown'}
                       </p>
                     </div>
                     <div className="shrink-0 text-right text-xs text-white/40">
@@ -170,7 +174,13 @@ export default function AdminVisitorsPage() {
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{v.path}</p>
-                    <p className="truncate text-xs text-white/40">{formatVisitorLocation(v)}</p>
+                    {v.ip_address ? (
+                      <p className="truncate font-mono text-xs text-brand-gold">{v.ip_address}</p>
+                    ) : null}
+                    <p className="truncate text-xs text-white/40">
+                      {[v.city, v.region, v.country].filter(Boolean).join(', ') ||
+                        formatVisitorLocation(v)}
+                    </p>
                   </div>
                   <span className="shrink-0 text-xs text-white/40">{relativeTime(v.created_at)}</span>
                 </li>
