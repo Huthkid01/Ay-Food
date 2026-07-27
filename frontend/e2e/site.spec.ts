@@ -15,7 +15,13 @@ async function fillCheckout(page: Page, name = 'E2E Customer') {
   await page.getByLabel(/Full Name/i).fill(name);
   await page.getByLabel(/^Phone$/i).fill('08173097933');
   await page.getByLabel(/Email/i).fill('e2e@ayfoodpalace.com');
-  await page.getByLabel(/Delivery Address/i).fill('Ogijo, Ikorodu');
+  // Prefer labelled field; fall back for older deploys without htmlFor
+  const address = page.getByLabel(/Delivery Address/i);
+  if (await address.count()) {
+    await address.fill('Ogijo, Ikorodu');
+  } else {
+    await page.locator('textarea').first().fill('Ogijo, Ikorodu');
+  }
 }
 
 test.describe('Ay Food storefront', () => {

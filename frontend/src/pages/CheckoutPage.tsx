@@ -410,7 +410,9 @@ export default function CheckoutPage() {
             <>
               <div>
                 <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <label className="block text-sm text-secondary">Delivery address</label>
+                  <label htmlFor="checkout-address" className="block text-sm text-secondary">
+                    Delivery address
+                  </label>
                   <button
                     type="button"
                     onClick={() => void handleUseCurrentLocation()}
@@ -422,6 +424,7 @@ export default function CheckoutPage() {
                   </button>
                 </div>
                 <textarea
+                  id="checkout-address"
                   {...register('deliveryAddress')}
                   rows={3}
                   className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
