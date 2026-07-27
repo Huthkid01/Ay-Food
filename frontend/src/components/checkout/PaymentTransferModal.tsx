@@ -21,6 +21,8 @@ type Props = {
   onClose?: () => void;
   /** When true, show tracking step (order already placed). */
   confirmed?: boolean;
+  /** Kora return: thank-you copy + WhatsApp / track actions (no bank UI). */
+  variant?: 'transfer' | 'kora';
 };
 
 function CopyRow({ label, value }: { label: string; value: string }) {
@@ -63,16 +65,20 @@ export function PaymentTransferModal({
   onContinueWhatsApp,
   onClose,
   confirmed = false,
+  variant = 'transfer',
 }: Props) {
-  const [step, setStep] = useState<'pay' | 'tracking'>(confirmed ? 'tracking' : 'pay');
+  const isKora = variant === 'kora';
+  const [step, setStep] = useState<'pay' | 'tracking'>(
+    confirmed || isKora ? 'tracking' : 'pay',
+  );
   const [copiedTrack, setCopiedTrack] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setStep(confirmed ? 'tracking' : 'pay');
+    setStep(confirmed || isKora ? 'tracking' : 'pay');
     setConfirming(false);
-  }, [open, orderNumber, confirmed]);
+  }, [open, orderNumber, confirmed, isKora]);
 
   useEffect(() => {
     if (!open) return;
@@ -134,12 +140,18 @@ export function PaymentTransferModal({
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
           <div className="min-w-0">
             <h2 id="payment-modal-title" className="font-display text-xl font-bold text-white">
-              {step === 'pay' ? 'Make payment' : 'Payment confirmed'}
+              {step === 'pay'
+                ? 'Make payment'
+                : isKora
+                  ? 'Thank you for your order'
+                  : 'Payment confirmed'}
             </h2>
             <p className="mt-1 text-sm text-white/55">
               {step === 'pay'
                 ? 'Transfer the exact amount, then confirm below. Close to keep editing your order.'
-                : 'Save your tracking number to follow your order.'}
+                : isKora
+                  ? 'You can track your order anytime — or contact us on WhatsApp with your order summary.'
+                  : 'Save your tracking number to follow your order.'}
             </p>
           </div>
           {canDismiss && (
@@ -196,6 +208,15 @@ export function PaymentTransferModal({
           </div>
         ) : (
           <div className="space-y-4 px-5 py-5">
+            {isKora && (
+              <div className="rounded-xl bg-brand-gold/15 px-4 py-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-brand-gold/80">Amount paid</p>
+                <p className="mt-1 font-display text-2xl font-bold text-brand-gold">
+                  {formatCurrency(amount)}
+                </p>
+              </div>
+            )}
+
             <div className="rounded-xl border border-brand-green/30 bg-brand-green/10 px-4 py-4 text-center">
               <p className="text-xs uppercase tracking-wide text-brand-green/90">
                 Your tracking number
@@ -214,8 +235,9 @@ export function PaymentTransferModal({
             </div>
 
             <p className="text-center text-sm text-white/65">
-              Save your tracking number. You can track your order anytime from Track Order in the
-              menu. Next, send your order on WhatsApp so we can confirm your payment.
+              {isKora
+                ? 'Thank you for your order. You can track it anytime from Track Order. You can also contact us on WhatsApp — we’ll open a chat with your order summary.'
+                : 'Save your tracking number. You can track your order anytime from Track Order in the menu. Next, send your order on WhatsApp so we can confirm your payment.'}
             </p>
 
             <button
@@ -223,7 +245,7 @@ export function PaymentTransferModal({
               onClick={onContinueWhatsApp}
               className="w-full rounded-full bg-brand-gold py-3.5 font-semibold text-white hover:bg-brand-gold-dark"
             >
-              Continue to WhatsApp
+              {isKora ? 'Contact us on WhatsApp' : 'Continue to WhatsApp'}
             </button>
 
             {canDismiss && (
@@ -232,7 +254,7 @@ export function PaymentTransferModal({
                 onClick={onClose}
                 className="w-full rounded-full border border-white/20 py-3 text-sm font-semibold text-white/80 hover:border-brand-gold hover:text-brand-gold"
               >
-                Skip WhatsApp — track my order
+                {isKora ? 'Track my order' : 'Skip WhatsApp — track my order'}
               </button>
             )}
           </div>

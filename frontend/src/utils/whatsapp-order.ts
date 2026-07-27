@@ -82,7 +82,9 @@ export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
 
   lines.push('', `Total: ${formatCurrency(order.total)}`);
 
-  if (order.paid) {
+  if (order.paid && order.paymentProvider?.toLowerCase() === 'kora') {
+    lines.push('', `I've paid via Kora. Looking forward to my order — thank you! 🙏`);
+  } else if (order.paid) {
     lines.push('', `I've made the bank transfer. Please confirm when you see it — thank you! 🙏`);
   } else if (order.paymentNote?.trim()) {
     lines.push('', order.paymentNote.trim());

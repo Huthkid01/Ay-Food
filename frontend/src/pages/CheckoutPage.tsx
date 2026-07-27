@@ -140,7 +140,7 @@ export default function CheckoutPage() {
           whatsapp,
         });
         setSearchParams({}, { replace: true });
-        showToast('Payment confirmed — check your email for tracking details');
+        showToast('Thank you for your order — you can track it anytime');
       } catch (err) {
         if (!cancelled) {
           showToast(
@@ -260,17 +260,19 @@ export default function CheckoutPage() {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <h1 className="mb-2 font-display text-3xl font-bold">
-          <span className="text-gradient">Order placed</span>
+          <span className="text-gradient">Thank you for your order</span>
         </h1>
         <p className="mb-6 text-white/60">
           Tracking number {completed.orderNumber} · {formatCurrency(completed.total)}
         </p>
         <p className="mb-4 text-sm text-white/50">
-          A thank-you email with your items and tracking number was sent to your inbox.
+          You can track your order anytime. A thank-you email with your items and tracking number
+          was sent to your inbox.
         </p>
         <PaymentTransferModal
           open
           confirmed
+          variant="kora"
           amount={completed.total}
           orderNumber={completed.orderNumber}
           bank={{
