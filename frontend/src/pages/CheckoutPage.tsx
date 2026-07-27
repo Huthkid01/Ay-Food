@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -7,11 +7,9 @@ import { useMutation } from '@tanstack/react-query';
 import { MapPin } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useSiteContentData } from '../hooks/useSiteContent';
-import { createOrderInDatabase } from '../services/orders.service';
 import { formatCurrency } from '../utils/helpers';
 import { openOrderOnWhatsApp, type WhatsAppOrderDetails } from '../utils/whatsapp-order';
 import { PaymentTransferModal } from '../components/checkout/PaymentTransferModal';
-import { notifyAdminPaymentConfirmed } from '../services/payment-notify.service';
 import { useToast } from '../components/ui/Toast';
 import {
   geolocationErrorMessage,
@@ -19,6 +17,14 @@ import {
   locationBlockedHelp,
   resolveDeliveryAddressFromGps,
 } from '../utils/delivery-location';
+import {
+  clearPendingKoraCheckout,
+  createOrderAwaitingKora,
+  readPendingKoraCheckout,
+  savePendingKoraCheckout,
+  startKoraCheckout,
+  verifyKoraPayment,
+} from '../services/kora-payment.service';
 
 const checkoutSchema = z
   .object({
@@ -41,31 +47,6 @@ const checkoutSchema = z
 
 type CheckoutForm = z.infer<typeof checkoutSchema>;
 
-type CartSnapshotItem = {
-  id: string;
-  foodId: string;
-  foodPortionId?: string;
-  foodName: string;
-  portionName: string;
-  quantity: number;
-  unitPrice: number;
-  notes?: string;
-  packName?: string;
-  image?: string;
-};
-
-/** Draft payment — order is NOT in admin until “I have made payment”. */
-type PaymentDraft = {
-  orderNumber: string;
-  form: CheckoutForm;
-  total: number;
-  subtotal: number;
-  packFees: number;
-  tax: number;
-  deliveryFee: number;
-  items: CartSnapshotItem[];
-};
-
 type CompletedOrder = {
   orderNumber: string;
   total: number;
@@ -78,12 +59,13 @@ function nextOrderNumber() {
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { getFlattenedItems, subtotal, packFees, activePacks, clearCart } = useCart();
   const { restaurant } = useSiteContentData();
   const { showToast } = useToast();
   const items = getFlattenedItems();
-  const [draft, setDraft] = useState<PaymentDraft | null>(null);
   const [completed, setCompleted] = useState<CompletedOrder | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const [locating, setLocating] = useState(false);
   const [mapsUrl, setMapsUrl] = useState<string | null>(null);
   const [locationBlocked, setLocationBlocked] = useState(false);
@@ -108,6 +90,74 @@ export default function CheckoutPage() {
   const deliveryFee = orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
   const total = taxable + tax + deliveryFee;
 
+  useEffect(() => {
+    const kora = searchParams.get('kora');
+    const reference =
+      searchParams.get('reference')?.trim() ||
+      readPendingKoraCheckout()?.reference ||
+      '';
+
+    if (kora !== 'return' || !reference || completed) return;
+
+    let cancelled = false;
+    setVerifying(true);
+
+    void (async () => {
+      try {
+        const result = await verifyKoraPayment(reference);
+        if (cancelled) return;
+
+        if (!result.paid) {
+          showToast(result.message || result.error || 'Payment not completed yet', 'error');
+          return;
+        }
+
+        const whatsapp: WhatsAppOrderDetails = {
+          orderNumber: result.orderNumber,
+          customerName: result.customerName,
+          customerPhone: result.customerPhone,
+          customerEmail: result.customerEmail,
+          orderType: result.orderType === 'DELIVERY' ? 'DELIVERY' : 'PICKUP',
+          deliveryAddress: result.deliveryAddress ?? undefined,
+          deliveryInstructions: result.deliveryInstructions ?? undefined,
+          items: (result.items ?? []).map((i) => ({
+            foodName: i.food_name || 'Item',
+            portionName: i.portion_name || 'Standard',
+            quantity: i.quantity ?? 1,
+            unitPrice: i.unit_price ?? 0,
+            packName: i.pack_name ?? undefined,
+          })),
+          total: result.total,
+          paid: true,
+          paymentProvider: 'Kora',
+        };
+
+        clearCart();
+        clearPendingKoraCheckout();
+        setCompleted({
+          orderNumber: result.orderNumber,
+          total: result.total,
+          whatsapp,
+        });
+        setSearchParams({}, { replace: true });
+        showToast('Payment confirmed — check your email for tracking details');
+      } catch (err) {
+        if (!cancelled) {
+          showToast(
+            err instanceof Error ? err.message : 'Could not verify payment',
+            'error',
+          );
+        }
+      } finally {
+        if (!cancelled) setVerifying(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, completed, clearCart, setSearchParams, showToast]);
+
   async function handleUseCurrentLocation() {
     setLocating(true);
     setLocationBlocked(false);
@@ -119,14 +169,9 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Triggers the browser Allow / Don’t allow dialog when permission is “prompt”
-      const result = await resolveDeliveryAddressFromGps();
-      setValue('deliveryAddress', result.address, {
-        shouldValidate: true,
-        shouldDirty: true,
-      });
-      setMapsUrl(result.mapsUrl);
-      setLocationBlocked(false);
+      const { address, mapsUrl: pinUrl } = await resolveDeliveryAddressFromGps();
+      setValue('deliveryAddress', address, { shouldValidate: true });
+      setMapsUrl(pinUrl);
       showToast('Location filled — you can edit the address if needed');
     } catch (err) {
       const denied =
@@ -137,56 +182,29 @@ export default function CheckoutPage() {
       setLocating(false);
     }
   }
-  /** Open payment modal only — do not create the order yet. */
-  function openPaymentDraft(form: CheckoutForm) {
-    const snapshotItems: CartSnapshotItem[] = items.map((i) => ({
-      id: i.id,
-      foodId: i.foodId,
-      foodPortionId: i.foodPortionId,
-      foodName: i.foodName,
-      portionName: i.portionName,
-      quantity: i.quantity,
-      unitPrice: i.unitPrice,
-      notes: i.notes,
-      packName: i.packName,
-      image: i.image,
-    }));
 
-    const draftDelivery =
-      form.orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
-    const draftTax = (subtotal + packFees) * 0.075;
-    const draftTotal = subtotal + packFees + draftTax + draftDelivery;
+  const payWithKora = useMutation({
+    mutationFn: async (form: CheckoutForm) => {
+      const draftDelivery =
+        form.orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
+      const draftTax = (subtotal + packFees) * 0.075;
+      const draftTotal = subtotal + packFees + draftTax + draftDelivery;
+      const orderNumber = nextOrderNumber();
 
-    setDraft({
-      orderNumber: nextOrderNumber(),
-      form,
-      total: draftTotal,
-      subtotal: subtotal + packFees,
-      packFees,
-      tax: draftTax,
-      deliveryFee: draftDelivery,
-      items: snapshotItems,
-    });
-  }
-
-  const confirmPaid = useMutation({
-    mutationFn: async (payment: PaymentDraft) => {
-      const { form, items: snapItems } = payment;
-
-      const order = await createOrderInDatabase({
-        orderNumber: payment.orderNumber,
+      await createOrderAwaitingKora({
+        orderNumber,
         orderType: form.orderType,
         customerName: form.customerName,
         customerPhone: form.customerPhone,
         customerEmail: form.customerEmail,
         deliveryAddress: form.orderType === 'DELIVERY' ? form.deliveryAddress : undefined,
         deliveryInstructions: form.deliveryInstructions,
-        subtotal: payment.subtotal,
-        tax: payment.tax,
-        deliveryFee: payment.deliveryFee,
+        subtotal: subtotal + packFees,
+        tax: draftTax,
+        deliveryFee: draftDelivery,
         discount: 0,
-        total: payment.total,
-        items: snapItems.map((i) => ({
+        total: draftTotal,
+        items: items.map((i) => ({
           foodId: i.foodId,
           foodName: i.foodName,
           portionName: i.portionName,
@@ -197,57 +215,23 @@ export default function CheckoutPage() {
         })),
       });
 
-      return {
-        orderNumber: order.orderNumber,
-        total: order.total,
-        form,
-        snapItems,
-      };
+      const checkout = await startKoraCheckout(orderNumber);
+      savePendingKoraCheckout({
+        reference: checkout.reference,
+        orderNumber: checkout.orderNumber,
+      });
+      return checkout;
     },
-    onSuccess: ({ orderNumber, total: orderTotal, form, snapItems }) => {
-      const whatsapp: WhatsAppOrderDetails = {
-        orderNumber,
-        customerName: form.customerName,
-        customerPhone: form.customerPhone,
-        customerEmail: form.customerEmail,
-        orderType: form.orderType,
-        deliveryAddress: form.orderType === 'DELIVERY' ? form.deliveryAddress : undefined,
-        deliveryInstructions: form.deliveryInstructions,
-        items: snapItems.map((i) => ({
-          foodName: i.foodName,
-          portionName: i.portionName,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          packName: i.packName,
-          notes: i.notes,
-        })),
-        total: orderTotal,
-        paid: true,
-      };
-
-      clearCart();
-      setDraft(null);
-      setCompleted({ orderNumber, total: orderTotal, whatsapp });
-      void notifyAdminPaymentConfirmed(whatsapp);
+    onSuccess: (checkout) => {
+      window.location.assign(checkout.checkoutUrl);
     },
     onError: (err) => {
       showToast(
-        err instanceof Error
-          ? err.message
-          : 'Could not save order to database. Please try again.',
+        err instanceof Error ? err.message : 'Could not start payment. Please try again.',
         'error',
       );
     },
   });
-
-  function handleCancelPayment() {
-    setDraft(null);
-  }
-
-  async function handleConfirmPaid() {
-    if (!draft) return;
-    await confirmPaid.mutateAsync(draft);
-  }
 
   function handleContinueWhatsApp() {
     if (!completed) return;
@@ -261,6 +245,17 @@ export default function CheckoutPage() {
     navigate(`/track?order=${encodeURIComponent(orderNumber)}`);
   }
 
+  if (verifying) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-20 text-center">
+        <h1 className="mb-3 font-display text-3xl font-bold">
+          <span className="text-gradient">Confirming payment</span>
+        </h1>
+        <p className="text-white/60">Please wait while we verify your Kora payment…</p>
+      </div>
+    );
+  }
+
   if (completed) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
@@ -269,6 +264,9 @@ export default function CheckoutPage() {
         </h1>
         <p className="mb-6 text-white/60">
           Tracking number {completed.orderNumber} · {formatCurrency(completed.total)}
+        </p>
+        <p className="mb-4 text-sm text-white/50">
+          A thank-you email with your items and tracking number was sent to your inbox.
         </p>
         <PaymentTransferModal
           open
@@ -288,7 +286,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (items.length === 0 && !draft) {
+  if (items.length === 0) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <p className="text-white/60">Your cart is empty</p>
@@ -303,7 +301,7 @@ export default function CheckoutPage() {
       </h1>
 
       <form
-        onSubmit={handleSubmit((d) => openPaymentDraft(d))}
+        onSubmit={handleSubmit((d) => payWithKora.mutate(d))}
         className="grid gap-8 lg:grid-cols-2 lg:gap-10"
       >
         <div className="space-y-5">
@@ -339,8 +337,8 @@ export default function CheckoutPage() {
             </label>
             <input
               id="checkout-email"
-              {...register('customerEmail')}
               type="email"
+              {...register('customerEmail')}
               className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
             />
             {errors.customerEmail && (
@@ -349,18 +347,23 @@ export default function CheckoutPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-secondary">Order Type</label>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="mb-2 text-sm text-secondary">Order type</p>
+            <div className="flex gap-3">
               {(['DELIVERY', 'PICKUP'] as const).map((type) => (
                 <label
                   key={type}
-                  className={`flex cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition ${
+                  className={`flex-1 cursor-pointer rounded-2xl border px-4 py-3 text-center text-sm font-medium transition ${
                     orderType === type
-                      ? 'border-brand-gold bg-brand-gold/10 text-brand-gold'
-                      : 'border-brand-subtle bg-brand-card text-secondary hover:border-white/20'
+                      ? 'border-brand-gold bg-brand-gold/15 text-brand-gold'
+                      : 'border-brand-subtle bg-brand-card text-secondary'
                   }`}
                 >
-                  <input type="radio" className="sr-only" {...register('orderType')} value={type} />
+                  <input
+                    type="radio"
+                    value={type}
+                    {...register('orderType')}
+                    className="sr-only"
+                  />
                   {type === 'DELIVERY' ? 'Delivery' : 'Pickup'}
                 </label>
               ))}
@@ -371,24 +374,20 @@ export default function CheckoutPage() {
             <>
               <div>
                 <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <label htmlFor="checkout-address" className="block text-sm text-secondary">
-                    Delivery Address
-                  </label>
+                  <label className="block text-sm text-secondary">Delivery address</label>
                   <button
                     type="button"
-                    onClick={handleUseCurrentLocation}
+                    onClick={() => void handleUseCurrentLocation()}
                     disabled={locating}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-brand-gold/40 bg-brand-gold/10 px-3 py-1 text-xs font-semibold text-brand-gold transition hover:bg-brand-gold/20 disabled:cursor-wait disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-gold hover:underline disabled:opacity-50"
                   >
-                    <MapPin size={13} />
-                    {locating ? 'Getting location…' : 'Use current location'}
+                    <MapPin size={14} />
+                    {locating ? 'Locating…' : 'Use current location'}
                   </button>
                 </div>
                 <textarea
-                  id="checkout-address"
                   {...register('deliveryAddress')}
                   rows={3}
-                  placeholder="Street, landmark, area — or tap Use current location"
                   className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
                 />
                 {mapsUrl && (
@@ -396,7 +395,7 @@ export default function CheckoutPage() {
                     href={mapsUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-gold hover:underline"
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-brand-gold hover:underline"
                   >
                     <MapPin size={12} />
                     Open pin in Google Maps
@@ -426,10 +425,10 @@ export default function CheckoutPage() {
           )}
 
           <div className="rounded-2xl border border-brand-gold/25 bg-brand-gold/10 px-4 py-4 text-sm">
-            <p className="font-medium text-brand-gold">Payment: Bank transfer</p>
+            <p className="font-medium text-brand-gold">Payment: Kora (card / bank)</p>
             <p className="mt-1.5 leading-relaxed text-secondary">
-              We’ll show the account details next. Your order is only sent to the kitchen after you
-              tap “I have made payment”. You can close the payment screen to add more items first.
+              You’ll be redirected to Kora’s secure checkout. After payment you’ll return here with
+              your tracking number — and get a thank-you email with your order details.
             </p>
           </div>
         </div>
@@ -447,7 +446,9 @@ export default function CheckoutPage() {
                         {item.foodName} ({item.portionName}) ×{item.quantity}
                         {item.unitPrice === 0 ? ' · free' : ''}
                       </span>
-                      <span className="text-white">{formatCurrency(item.unitPrice * item.quantity)}</span>
+                      <span className="text-white">
+                        {formatCurrency(item.unitPrice * item.quantity)}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -478,20 +479,26 @@ export default function CheckoutPage() {
               <span className="text-brand-gold">{formatCurrency(total)}</span>
             </div>
           </div>
-          <button type="submit" className="btn-primary btn-ripple mt-6 hidden w-full py-3.5 sm:flex">
-            Continue to payment
+          <button
+            type="submit"
+            disabled={payWithKora.isPending}
+            className="btn-primary btn-ripple mt-6 hidden w-full py-3.5 sm:flex disabled:opacity-60"
+          >
+            {payWithKora.isPending ? 'Starting Kora…' : 'Pay with Kora'}
           </button>
         </div>
 
-        {/* Sticky mobile pay CTA — left, like View cart (keeps right clear for chat) */}
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 w-[min(calc(100vw-5.5rem),20rem)] sm:hidden lg:col-span-2">
           <button
             type="submit"
-            className="glass-panel flex w-full items-center justify-between gap-3 rounded-2xl p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)]"
-            aria-label="Continue to payment"
+            disabled={payWithKora.isPending}
+            className="glass-panel flex w-full items-center justify-between gap-3 rounded-2xl p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)] disabled:opacity-60"
+            aria-label="Pay with Kora"
           >
             <span className="min-w-0 text-left">
-              <span className="block text-sm font-semibold text-white">Continue to payment</span>
+              <span className="block text-sm font-semibold text-white">
+                {payWithKora.isPending ? 'Starting Kora…' : 'Pay with Kora'}
+              </span>
               <span className="block text-xs text-secondary">{formatCurrency(total)}</span>
             </span>
             <span className="shrink-0 rounded-xl bg-brand-gold px-3 py-2 text-xs font-bold text-white">
@@ -500,22 +507,6 @@ export default function CheckoutPage() {
           </button>
         </div>
       </form>
-
-      {draft && !completed && (
-        <PaymentTransferModal
-          open
-          amount={draft.total}
-          orderNumber={draft.orderNumber}
-          bank={{
-            bankName: restaurant.bankName,
-            accountName: restaurant.accountName,
-            accountNumber: restaurant.accountNumber,
-          }}
-          onConfirmPaid={handleConfirmPaid}
-          onContinueWhatsApp={handleContinueWhatsApp}
-          onClose={handleCancelPayment}
-        />
-      )}
     </div>
   );
 }

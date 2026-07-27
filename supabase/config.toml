@@ -24,3 +24,12 @@ verify_jwt = false
 
 [functions.track-order]
 verify_jwt = false
+
+[functions.kora-init]
+verify_jwt = false
+
+[functions.kora-verify]
+verify_jwt = false
+
+[functions.kora-webhook]
+verify_jwt = false
