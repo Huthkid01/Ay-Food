@@ -52,8 +52,7 @@ export default function MenuPage() {
             {' '}
             · Adding to <span className="font-medium text-brand-gold">{packName}</span>
           </>
-        ) : null}{' '}
-        · {displayedFoods.length} items from the A.Y Food Mega Palace menu
+        ) : null}
       </p>
       <div className="mb-8">
         <div className="relative w-full max-w-xl">
