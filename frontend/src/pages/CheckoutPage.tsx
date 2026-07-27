@@ -74,8 +74,7 @@ export default function CheckoutPage() {
   const [mapsUrl, setMapsUrl] = useState<string | null>(null);
   const [locationBlocked, setLocationBlocked] = useState(false);
 
-  const taxable = subtotal + packFees;
-  const tax = taxable * 0.075;
+  const itemsTotal = subtotal + packFees;
 
   const {
     register,
@@ -92,9 +91,9 @@ export default function CheckoutPage() {
 
   const orderType = watch('orderType');
   const deliveryFee = orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
-  const total = taxable + tax + deliveryFee;
-  const processingFee = getKoraProcessingFeeNgn(total);
-  const chargeTotal = getKoraChargeNgn(total);
+  const orderTotal = itemsTotal + deliveryFee;
+  const processingFee = getKoraProcessingFeeNgn(orderTotal);
+  const chargeTotal = getKoraChargeNgn(orderTotal);
 
   useEffect(() => {
     const kora = searchParams.get('kora');
@@ -193,8 +192,7 @@ export default function CheckoutPage() {
     mutationFn: async (form: CheckoutForm) => {
       const draftDelivery =
         form.orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
-      const draftTax = (subtotal + packFees) * 0.075;
-      const draftTotal = subtotal + packFees + draftTax + draftDelivery;
+      const draftTotal = subtotal + packFees + draftDelivery;
       const orderNumber = nextOrderNumber();
 
       await createOrderAwaitingKora({
@@ -206,7 +204,7 @@ export default function CheckoutPage() {
         deliveryAddress: form.orderType === 'DELIVERY' ? form.deliveryAddress : undefined,
         deliveryInstructions: form.deliveryInstructions,
         subtotal: subtotal + packFees,
-        tax: draftTax,
+        tax: 0,
         deliveryFee: draftDelivery,
         discount: 0,
         total: draftTotal,
@@ -447,8 +445,8 @@ export default function CheckoutPage() {
           <div className="rounded-2xl border border-brand-gold/25 bg-brand-gold/10 px-4 py-4 text-sm">
             <p className="font-medium text-brand-gold">Payment: Kora (card / bank)</p>
             <p className="mt-1.5 leading-relaxed text-secondary">
-              You’ll choose card or bank transfer on Kora’s secure checkout. A small processing fee is
-              added so the restaurant receives your full order amount after Kora’s charges.
+              You’ll choose card or bank transfer on Kora’s secure checkout. Pay the exact amount
+              shown — then you’ll return here with your tracking number.
             </p>
           </div>
         </div>
@@ -487,23 +485,11 @@ export default function CheckoutPage() {
               </div>
             )}
             <div className="flex justify-between text-secondary">
-              <span>Tax</span>
-              <span>{formatCurrency(tax)}</span>
-            </div>
-            <div className="flex justify-between text-secondary">
               <span>{orderType === 'DELIVERY' ? 'Delivery' : 'Delivery (pickup — free)'}</span>
               <span>{formatCurrency(deliveryFee)}</span>
             </div>
-            <div className="flex justify-between text-secondary">
-              <span>Order total</span>
-              <span>{formatCurrency(total)}</span>
-            </div>
-            <div className="flex justify-between text-secondary">
-              <span>Processing fee</span>
-              <span>{formatCurrency(processingFee)}</span>
-            </div>
             <div className="flex justify-between border-t border-brand-subtle pt-3 text-lg font-bold">
-              <span>You pay</span>
+              <span>Total</span>
               <span className="text-brand-gold">{formatCurrency(chargeTotal)}</span>
             </div>
           </div>
@@ -538,7 +524,7 @@ export default function CheckoutPage() {
 
       <KoraPaymentConfirmModal
         open={confirmOpen}
-        orderTotal={total}
+        orderTotal={orderTotal}
         processingFee={processingFee}
         chargeTotal={chargeTotal}
         submitting={payWithKora.isPending}

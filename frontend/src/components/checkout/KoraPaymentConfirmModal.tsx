@@ -54,7 +54,7 @@ export function KoraPaymentConfirmModal({
           transaction.
         </p>
 
-        <div className="mt-5 space-y-2 rounded-xl border border-white/10 bg-brand-dark px-4 py-4 text-sm">
+        <div className="mt-5 space-y-2 rounded-xl border border-white/10 bg-brand-dark px-4 py-4 text-left text-sm">
           <div className="flex justify-between gap-3 text-white/65">
             <span>Order total</span>
             <span>{formatCurrency(orderTotal)}</span>

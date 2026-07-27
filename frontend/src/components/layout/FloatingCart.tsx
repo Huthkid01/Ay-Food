@@ -10,7 +10,7 @@ export function FloatingCart() {
   if (location.pathname === '/cart' || location.pathname === '/checkout') return null;
   if (itemCount <= 0) return null;
 
-  const estimate = subtotal + packFees + (subtotal + packFees) * 0.075;
+  const estimate = subtotal + packFees;
 
   return (
     <div className="animate-fade-up fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 w-[min(calc(100vw-5.5rem),20rem)] sm:bottom-6 sm:left-6 sm:z-50 sm:w-auto">
