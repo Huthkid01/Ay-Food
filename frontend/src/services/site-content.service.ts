@@ -50,18 +50,37 @@ function mergeHeroSlide(base: HeroSlide, patch: unknown): HeroSlide {
   });
 }
 
-/** Upgrade legacy “Ay Food” hero titles to “Ay Food Palace”. */
+/** Welcome hero: white “Welcome to” + gold “Ay Food Palace” (matches other slides). */
 function normalizeHeroBrandTitle(slide: HeroSlide): HeroSlide {
-  const combined = [slide.title, slide.highlight]
+  const title = slide.title.trim();
+  const highlight = (slide.highlight ?? '').trim();
+  const combined = [title, highlight]
     .filter(Boolean)
     .join(' ')
     .replace(/[.\s]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
-  if (combined === 'ay food' || combined === 'ayfood' || combined === 'ay') {
-    return { ...slide, title: 'Ay Food Palace', highlight: '' };
+
+  const isBrandOnly =
+    combined === 'ay food' ||
+    combined === 'ayfood' ||
+    combined === 'ay' ||
+    combined === 'ay food palace' ||
+    combined === 'welcome to ay food palace';
+
+  if (isBrandOnly) {
+    return { ...slide, title: 'Welcome to', highlight: 'Ay Food Palace' };
   }
+
+  if (
+    !highlight &&
+    (title.toLowerCase() === 'ay food palace' ||
+      title.toLowerCase() === 'welcome to ay food palace')
+  ) {
+    return { ...slide, title: 'Welcome to', highlight: 'Ay Food Palace' };
+  }
+
   return slide;
 }
 

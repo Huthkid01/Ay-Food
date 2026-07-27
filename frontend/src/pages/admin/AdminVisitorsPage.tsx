@@ -73,7 +73,8 @@ export default function AdminVisitorsPage() {
           <h1 className="font-display text-3xl font-bold">Site Visits</h1>
           <p className="mt-1 text-sm text-white/50">
             Live traffic · on site now = active in the last {SITE_ACTIVE_WINDOW_MINUTES} minutes.
-            Each visit shows the visitor’s public IP plus city / region from that IP.
+            IP is the visitor’s real public network address. City/region comes from that IP
+            (cross-checked across GeoIP providers) — not GPS street address.
           </p>
         </div>
         <button
