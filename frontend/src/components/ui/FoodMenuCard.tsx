@@ -43,7 +43,7 @@ export function FoodMenuCard({
   const imageSrc = resolveFoodImage(food);
 
   return (
-    <article className="food-card group flex min-w-0 flex-col">
+    <article className="food-card group flex h-fit min-w-0 flex-col self-start">
       <button
         type="button"
         className="relative aspect-[4/3] cursor-zoom-in overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
@@ -72,7 +72,7 @@ export function FoodMenuCard({
         alt={food.name}
       />
 
-      <div className="flex flex-1 flex-col p-4 sm:p-5">
+      <div className="flex flex-col p-4 sm:p-5">
         {showCategory && (
           <span className="mb-2 inline-flex w-fit rounded-full bg-brand-green/15 px-2.5 py-0.5 text-[11px] font-medium text-[#A3C04A]">
             {food.category.name}
