@@ -84,6 +84,12 @@ export type CategoryInput = {
   isActive: boolean;
 };
 
+export type FoodPortionInput = {
+  portion_name: string;
+  price: number;
+  is_available?: boolean;
+};
+
 export type FoodInput = {
   name: string;
   slug: string;
@@ -92,7 +98,10 @@ export type FoodInput = {
   categoryId: string;
   categoryName: string;
   categorySlug: string;
+  /** Fallback / primary price when portions omitted */
   price: number;
+  /** Optional size options — admin-defined labels + prices */
+  portions?: FoodPortionInput[];
   isAvailable: boolean;
   isPopular: boolean;
   isNew: boolean;
@@ -174,6 +183,11 @@ export const foodAdminService = {
   },
 
   async create(input: FoodInput): Promise<AdminFood> {
+    const portionRows =
+      input.portions && input.portions.length > 0
+        ? input.portions
+        : [{ portion_name: 'Regular', price: input.price, is_available: true }];
+
     if (isSupabaseConfigured()) {
       const data = await adminRpc('admin_upsert_food', {
         p_food: {
@@ -182,7 +196,12 @@ export const foodAdminService = {
           description: input.description ?? '',
           image: input.image ?? '',
           category_id: input.categoryId,
-          price: input.price,
+          price: portionRows[0]?.price ?? input.price,
+          portions: portionRows.map((p) => ({
+            portion_name: p.portion_name,
+            price: p.price,
+            is_available: p.is_available !== false,
+          })),
           is_available: input.isAvailable,
           is_popular: input.isPopular,
           is_new: input.isNew,
@@ -205,13 +224,15 @@ export const foodAdminService = {
       isAvailable: input.isAvailable,
       prepTimeMinutes: input.prepTimeMinutes,
       category: { name: input.categoryName, slug: input.categorySlug },
-      portions: [
-        {
-          id: `${input.slug}-medium`,
-          price: input.price,
-          portion: { id: 'medium', name: 'Medium', slug: 'medium' },
+      portions: portionRows.map((p, i) => ({
+        id: `${input.slug}-${slugify(p.portion_name) || i}`,
+        price: p.price,
+        portion: {
+          id: slugify(p.portion_name) || `size-${i}`,
+          name: p.portion_name,
+          slug: slugify(p.portion_name) || `size-${i}`,
         },
-      ],
+      })),
     });
   },
 
@@ -231,17 +252,34 @@ export const foodAdminService = {
       if (input.isNew !== undefined) payload.is_new = input.isNew;
       if (input.prepTimeMinutes !== undefined) payload.prep_time_minutes = input.prepTimeMinutes;
       if (input.price !== undefined) payload.price = input.price;
+      if (input.portions !== undefined) {
+        payload.portions = input.portions.map((p) => ({
+          portion_name: p.portion_name,
+          price: p.price,
+          is_available: p.is_available !== false,
+        }));
+        if (input.portions[0]) payload.price = input.portions[0].price;
+      }
 
       const data = await adminRpc('admin_upsert_food', { p_food: payload });
       return mapFood(data as never);
     }
 
     const existing = adminStore.getFoods().find((f) => f.id === id);
-    const portions = existing?.portions ?? [];
     const nextPortions =
-      input.price !== undefined && portions[0]
-        ? [{ ...portions[0], price: input.price }, ...portions.slice(1)]
-        : portions;
+      input.portions && input.portions.length > 0
+        ? input.portions.map((p, i) => ({
+            id: `${id}-${slugify(p.portion_name) || i}`,
+            price: p.price,
+            portion: {
+              id: slugify(p.portion_name) || `size-${i}`,
+              name: p.portion_name,
+              slug: slugify(p.portion_name) || `size-${i}`,
+            },
+          }))
+        : input.price !== undefined && existing?.portions?.[0]
+          ? [{ ...existing.portions[0], price: input.price }, ...existing.portions.slice(1)]
+          : existing?.portions;
 
     return adminStore.updateFood(id, {
       ...(input.name !== undefined && { name: input.name }),
@@ -256,7 +294,7 @@ export const foodAdminService = {
         input.categorySlug && {
           category: { name: input.categoryName, slug: input.categorySlug },
         }),
-      ...(input.price !== undefined && { portions: nextPortions }),
+      ...(nextPortions && { portions: nextPortions }),
     });
   },
 

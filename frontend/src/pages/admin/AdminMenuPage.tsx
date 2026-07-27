@@ -25,12 +25,18 @@ import type { AdminFood } from '../../services/admin-store';
 import { formatCurrency, slugify } from '../../utils/helpers';
 import { resolveFoodImage } from '../../utils/food-images';
 
+type PortionFormRow = {
+  key: string;
+  name: string;
+  price: string;
+};
+
 type FoodForm = {
   name: string;
   slug: string;
   description: string;
   categoryId: string;
-  price: string;
+  portions: PortionFormRow[];
   prepTimeMinutes: string;
   imageUrl: string;
   isAvailable: boolean;
@@ -44,13 +50,23 @@ type FeaturedFilter = 'all' | 'popular' | 'new' | 'none';
 const selectClass =
   'rounded-xl border border-white/10 bg-brand-dark-light px-3 py-2.5 text-sm text-white outline-none focus:border-brand-gold';
 
+let portionKeySeq = 0;
+function nextPortionKey() {
+  portionKeySeq += 1;
+  return `portion-${portionKeySeq}`;
+}
+
+function emptyPortionRow(price = ''): PortionFormRow {
+  return { key: nextPortionKey(), name: '', price };
+}
+
 function emptyForm(categoryId: string): FoodForm {
   return {
     name: '',
     slug: '',
     description: '',
     categoryId,
-    price: '',
+    portions: [emptyPortionRow()],
     prepTimeMinutes: '15',
     imageUrl: '',
     isAvailable: true,
@@ -60,12 +76,21 @@ function emptyForm(categoryId: string): FoodForm {
 }
 
 function formFromFood(food: AdminFood, categoryId: string): FoodForm {
+  const portions =
+    food.portions?.length > 0
+      ? food.portions.map((p) => ({
+          key: nextPortionKey(),
+          name: p.portion?.name ?? '',
+          price: String(p.price ?? ''),
+        }))
+      : [emptyPortionRow()];
+
   return {
     name: food.name,
     slug: food.slug,
     description: food.description ?? '',
     categoryId,
-    price: String(food.portions?.[0]?.price ?? ''),
+    portions,
     prepTimeMinutes: String(food.prepTimeMinutes ?? 15),
     imageUrl: food.image || resolveFoodImage(food),
     isAvailable: food.isAvailable !== false,
@@ -74,11 +99,20 @@ function formFromFood(food: AdminFood, categoryId: string): FoodForm {
   };
 }
 
+function formatAdminPrice(food: AdminFood) {
+  const prices = (food.portions ?? []).map((p) => p.price);
+  if (prices.length === 0) return formatCurrency(0);
+  if (prices.length === 1) return formatCurrency(prices[0] ?? 0);
+  const min = Math.min(...prices);
+  return `from ${formatCurrency(min)}`;
+}
+
 function exportFoodsCsv(foods: AdminFood[]) {
   const headers = [
     'Name',
     'Slug',
     'Category',
+    'Sizes',
     'Price',
     'Status',
     'Popular',
@@ -86,17 +120,23 @@ function exportFoodsCsv(foods: AdminFood[]) {
     'PrepMinutes',
     'Description',
   ];
-  const rows = foods.map((f) => [
-    f.name,
-    f.slug,
-    f.category?.name ?? '',
-    String(f.portions?.[0]?.price ?? ''),
-    f.isAvailable !== false ? 'Available' : 'Hidden',
-    f.isPopular ? 'Yes' : 'No',
-    f.isNew ? 'Yes' : 'No',
-    String(f.prepTimeMinutes ?? ''),
-    (f.description ?? '').replace(/\n/g, ' '),
-  ]);
+  const rows = foods.map((f) => {
+    const sizes = (f.portions ?? [])
+      .map((p) => `${p.portion?.name ?? 'Regular'}:${p.price}`)
+      .join(' | ');
+    return [
+      f.name,
+      f.slug,
+      f.category?.name ?? '',
+      sizes,
+      String(f.portions?.[0]?.price ?? ''),
+      f.isAvailable !== false ? 'Available' : 'Hidden',
+      f.isPopular ? 'Yes' : 'No',
+      f.isNew ? 'Yes' : 'No',
+      String(f.prepTimeMinutes ?? ''),
+      (f.description ?? '').replace(/\n/g, ' '),
+    ];
+  });
 
   const escape = (cell: string) => `"${cell.replace(/"/g, '""')}"`;
   const csv = [headers, ...rows].map((row) => row.map(escape).join(',')).join('\n');
@@ -239,13 +279,28 @@ export default function AdminMenuPage() {
     mutationFn: async () => {
       if (!form.name.trim()) throw new Error('Name is required');
       if (!form.categoryId) throw new Error('Category is required');
-      if (form.price.trim() === '') {
-        throw new Error('Enter a price (0 or more). Leave blank is not allowed.');
-      }
-      const price = Number(form.price);
-      if (!Number.isFinite(price) || price < 0) {
-        throw new Error('Price must be 0 or higher (0 = free / confirm with kitchen)');
-      }
+      if (form.portions.length === 0) throw new Error('Add at least one price');
+
+      const multi = form.portions.length > 1;
+      const portions = form.portions.map((row, index) => {
+        const name = row.name.trim() || (multi ? '' : 'Regular');
+        if (multi && !name) {
+          throw new Error(`Enter a size name for option ${index + 1} (e.g. Small, Regular)`);
+        }
+        if (row.price.trim() === '') {
+          throw new Error(
+            multi
+              ? `Enter a price for “${name || `option ${index + 1}`}”`
+              : 'Enter a price (0 or more). Blank is not allowed.',
+          );
+        }
+        const price = Number(row.price);
+        if (!Number.isFinite(price) || price < 0) {
+          throw new Error(`Price for “${name || 'dish'}” must be 0 or higher`);
+        }
+        return { portion_name: name || 'Regular', price, is_available: true };
+      });
+
       const cat = categories.find((c) => c.id === form.categoryId);
       if (!cat) throw new Error('Pick a category');
 
@@ -259,7 +314,6 @@ export default function AdminMenuPage() {
         );
       }
 
-      // Description is optional — empty is fine
       const payload: FoodInput = {
         name: form.name.trim(),
         slug,
@@ -268,7 +322,8 @@ export default function AdminMenuPage() {
         categoryId: cat.id,
         categoryName: cat.name,
         categorySlug: cat.slug,
-        price,
+        price: portions[0]?.price ?? 0,
+        portions,
         isAvailable: form.isAvailable,
         isPopular: form.isPopular,
         isNew: form.isNew,
@@ -471,7 +526,8 @@ export default function AdminMenuPage() {
           </thead>
           <tbody>
             {paged.map((food) => {
-              const price = food.portions?.[0]?.price ?? 0;
+              const prices = food.portions ?? [];
+              const multi = prices.length > 1;
               const thumb = resolveFoodImage(food, 'thumb');
               return (
                 <tr key={food.id} className="border-t border-white/5">
@@ -508,15 +564,25 @@ export default function AdminMenuPage() {
                               New
                             </span>
                           )}
+                          {multi && (
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/55">
+                              {prices.length} sizes
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-white/60">{food.category?.name ?? '—'}</td>
                   <td className="px-4 py-3 font-semibold text-brand-gold">
-                    {formatCurrency(price)}
-                    {price === 0 ? (
+                    {formatAdminPrice(food)}
+                    {!multi && prices[0]?.price === 0 ? (
                       <span className="ml-1 text-[11px] font-normal text-white/45">(free)</span>
+                    ) : null}
+                    {multi ? (
+                      <p className="mt-1 text-[11px] font-normal text-white/40">
+                        {prices.map((p) => p.portion?.name).filter(Boolean).join(' · ')}
+                      </p>
                     ) : null}
                   </td>
                   <td className="px-4 py-3">
@@ -592,7 +658,9 @@ export default function AdminMenuPage() {
             <button
               type="submit"
               form="admin-dish-form"
-              disabled={save.isPending || form.price.trim() === ''}
+              disabled={
+                save.isPending || form.portions.some((p) => p.price.trim() === '')
+              }
               className="rounded-full bg-brand-gold px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
             >
               {save.isPending ? 'Saving…' : editing ? 'Save changes' : 'Add dish'}
@@ -691,28 +759,121 @@ export default function AdminMenuPage() {
           </div>
 
           <div className="rounded-xl border border-brand-gold/30 bg-brand-gold/5 p-4">
-            <label className="mb-1 block text-sm font-medium text-brand-gold">Price (₦)</label>
-            <input
-              type="number"
-              min={0}
-              step={50}
-              value={form.price}
-              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-              placeholder="Required — use 0 for free soups"
-              className="w-full rounded-xl border border-white/10 bg-brand-dark px-4 py-3 text-lg font-semibold outline-none focus:border-brand-gold"
-              required
-            />
-            {form.price.trim() === '' ? (
-              <p className="mt-2 text-sm text-red-300/90">
-                Price is required. Enter 0 or any amount above 0.
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-brand-gold">Price &amp; sizes</p>
+                <p className="mt-1 text-xs text-white/50">
+                  One price is enough for most dishes. Add more rows for optional sizes
+                  (Small, Regular, Size 1…) — you type the label and price.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    portions: [...f.portions, emptyPortionRow()],
+                  }))
+                }
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-gold/40 px-3 py-1.5 text-xs font-semibold text-brand-gold hover:bg-brand-gold/10"
+              >
+                <Plus size={14} /> Add size
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {form.portions.map((row, index) => {
+                const multi = form.portions.length > 1;
+                return (
+                  <div
+                    key={row.key}
+                    className="grid gap-2 rounded-xl border border-white/10 bg-brand-dark/60 p-3 sm:grid-cols-[1fr_8rem_auto]"
+                  >
+                    <div>
+                      <label className="mb-1 block text-xs text-white/50">
+                        Size name{multi ? '' : ' (optional)'}
+                      </label>
+                      <input
+                        value={row.name}
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setForm((f) => ({
+                            ...f,
+                            portions: f.portions.map((p) =>
+                              p.key === row.key ? { ...p, name } : p,
+                            ),
+                          }));
+                        }}
+                        placeholder={
+                          multi
+                            ? index === 0
+                              ? 'e.g. Small'
+                              : 'e.g. Regular / Size 2'
+                            : 'Leave blank for a single price'
+                        }
+                        className="w-full rounded-xl border border-white/10 bg-brand-dark px-3 py-2.5 text-sm outline-none focus:border-brand-gold"
+                        required={multi}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-white/50">Price (₦)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={50}
+                        value={row.price}
+                        onChange={(e) => {
+                          const price = e.target.value;
+                          setForm((f) => ({
+                            ...f,
+                            portions: f.portions.map((p) =>
+                              p.key === row.key ? { ...p, price } : p,
+                            ),
+                          }));
+                        }}
+                        placeholder="0"
+                        className="w-full rounded-xl border border-white/10 bg-brand-dark px-3 py-2.5 text-sm font-semibold outline-none focus:border-brand-gold"
+                        required
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        disabled={form.portions.length <= 1}
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            portions: f.portions.filter((p) => p.key !== row.key),
+                          }))
+                        }
+                        className="rounded-full border border-white/10 p-2.5 text-white/60 hover:border-red-400/40 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30"
+                        aria-label={`Remove size ${index + 1}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {form.portions.some((p) => p.price.trim() === '') ? (
+              <p className="mt-3 text-sm text-red-300/90">
+                Every size needs a price. Use 0 for free items.
               </p>
-            ) : Number(form.price) === 0 ? (
-              <p className="mt-2 text-sm text-white/50">
+            ) : form.portions.length === 1 && Number(form.portions[0]?.price) === 0 ? (
+              <p className="mt-3 text-sm text-white/50">
                 Customers can add this for ₦0 — it still appears in their order summary.
               </p>
-            ) : Number.isFinite(Number(form.price)) && Number(form.price) > 0 ? (
-              <p className="mt-2 text-sm text-white/50">
-                Customers will see {formatCurrency(Number(form.price))}
+            ) : form.portions.length === 1 &&
+              Number.isFinite(Number(form.portions[0]?.price)) &&
+              Number(form.portions[0]?.price) > 0 ? (
+              <p className="mt-3 text-sm text-white/50">
+                Customers will see {formatCurrency(Number(form.portions[0].price))}
+              </p>
+            ) : form.portions.length > 1 ? (
+              <p className="mt-3 text-sm text-white/50">
+                Customers pick a size on the menu card.
               </p>
             ) : null}
           </div>
