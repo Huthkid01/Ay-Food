@@ -1,10 +1,11 @@
 /**
- * Customer thank-you via Brevo SMTP.
- * Owner alert via FormSubmit (same as before).
+ * Customer thank-you via Truehost SMTP.
+ * Owner alert via FormSubmit AJAX (no page redirect).
  *
  * Secrets:
- * - BREVO_SMTP_LOGIN, BREVO_SMTP_PASSWORD
- * - optional: BREVO_SMTP_HOST, BREVO_SMTP_PORT, BREVO_FROM_EMAIL, BREVO_FROM_NAME
+ * - SMTP_HOST (workplace.truehost.cloud)
+ * - SMTP_USER / SMTP_PASSWORD
+ * - optional: SMTP_PORT (587), SMTP_FROM_EMAIL, SMTP_FROM_NAME
  * - optional: FORMSUBMIT_EMAIL, APP_URL, ADMIN_ORDER_EMAIL
  */
 
@@ -100,21 +101,23 @@ function getOwnerInbox() {
 
 function getFromAddress() {
   const email =
-    Deno.env.get('BREVO_FROM_EMAIL')?.trim() ||
-    getOwnerInbox();
-  const name = Deno.env.get('BREVO_FROM_NAME')?.trim() || 'Ay Food Palace';
+    Deno.env.get('SMTP_FROM_EMAIL')?.trim() ||
+    Deno.env.get('SMTP_USER')?.trim() ||
+    'contact@ayfoodpalace.com';
+  const name = Deno.env.get('SMTP_FROM_NAME')?.trim() || 'AyFoodPalace';
   return { email, name, header: `${name} <${email}>` };
 }
 
-function createBrevoTransport() {
-  const user = Deno.env.get('BREVO_SMTP_LOGIN')?.trim();
-  const pass = Deno.env.get('BREVO_SMTP_PASSWORD')?.trim();
-  const host = Deno.env.get('BREVO_SMTP_HOST')?.trim() || 'smtp-relay.brevo.com';
-  const port = Number(Deno.env.get('BREVO_SMTP_PORT')?.trim() || '587');
+function createSmtpTransport() {
+  const user = Deno.env.get('SMTP_USER')?.trim();
+  const pass = Deno.env.get('SMTP_PASSWORD')?.trim();
+  const host =
+    Deno.env.get('SMTP_HOST')?.trim() || 'workplace.truehost.cloud';
+  const port = Number(Deno.env.get('SMTP_PORT')?.trim() || '587');
 
   if (!user || !pass) {
     throw new Error(
-      'Brevo SMTP is not configured. Set BREVO_SMTP_LOGIN and BREVO_SMTP_PASSWORD in Supabase secrets.',
+      'SMTP is not configured. Set SMTP_USER and SMTP_PASSWORD in Supabase secrets.',
     );
   }
 
@@ -122,24 +125,20 @@ function createBrevoTransport() {
     host,
     port,
     secure: port === 465,
+    requireTLS: port === 587,
     auth: { user, pass },
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 30_000,
   });
 }
 
-/** Customer thank-you + order summary (Brevo SMTP only). */
-async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> {
-  const customerEmail = order.customer_email?.trim();
-  if (!customerEmail) {
-    console.error('sendCustomerThankYou: missing customer email');
-    return false;
-  }
-
+function buildCustomerEmail(order: OrderEmailPayload) {
   const appUrl = getAppUrl();
   const trackUrl = `${appUrl}/track?order=${encodeURIComponent(order.order_number)}`;
   const itemsText = formatItems(order.items);
   const itemsHtml = formatItemsHtml(order.items);
   const orderType = order.order_type === 'DELIVERY' ? 'Delivery' : 'Pickup';
-  const from = getFromAddress();
 
   const text = [
     `Hi ${order.customer_name},`,
@@ -159,7 +158,7 @@ async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> 
     '',
     'If you have any questions, reply to this email or chat with us on the website.',
     '',
-    '— Ay Food Palace',
+    '— AyFoodPalace',
   ].join('\n');
 
   const html = `
@@ -175,24 +174,42 @@ async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> 
     <p style="margin:24px 0 0;color:#555;font-size:13px;">Questions? Reply to this email or chat with us on <a href="${appUrl}" style="color:#f97316;">ayfoodpalace.com</a>.</p>
   </div>`;
 
+  return {
+    subject: `Thank you for your order — ${order.order_number}`,
+    text,
+    html,
+  };
+}
+
+/** Customer thank-you + order summary (Truehost SMTP). */
+async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> {
+  const customerEmail = order.customer_email?.trim();
+  if (!customerEmail) {
+    console.error('sendCustomerThankYou: missing customer email');
+    return false;
+  }
+
+  const content = buildCustomerEmail(order);
+  const from = getFromAddress();
+
   try {
-    const transporter = createBrevoTransport();
+    const transporter = createSmtpTransport();
     await transporter.sendMail({
       from: from.header,
       to: customerEmail,
       replyTo: from.email,
-      subject: `Thank you for your order — ${order.order_number}`,
-      text,
-      html,
+      subject: content.subject,
+      text: content.text,
+      html: content.html,
     });
     return true;
   } catch (err) {
-    console.error('Brevo customer email failed', err);
+    console.error('Truehost customer email failed', err);
     return false;
   }
 }
 
-/** Owner / kitchen alert (FormSubmit — unchanged channel). */
+/** Owner / kitchen alert via FormSubmit AJAX (no redirect). */
 async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boolean> {
   const ownerEmail = getOwnerInbox();
   const appUrl = getAppUrl();
@@ -210,6 +227,8 @@ async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boole
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        Origin: appUrl,
+        Referer: `${appUrl}/`,
       },
       body: JSON.stringify({
         _subject: `Order paid: ${order.order_number}`,
@@ -239,7 +258,22 @@ async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boole
         ].join('\n'),
       }),
     });
-    return res.ok;
+
+    const payload = (await res.json().catch(() => null)) as
+      | { success?: string | boolean; message?: string }
+      | null;
+    const success =
+      res.ok &&
+      (payload == null ||
+        payload.success === true ||
+        payload.success === 'true' ||
+        String(payload.success).toLowerCase() === 'true');
+
+    if (!success) {
+      console.error('FormSubmit owner alert rejected', res.status, payload);
+      return false;
+    }
+    return true;
   } catch (err) {
     console.error('FormSubmit owner alert failed', err);
     return false;
@@ -248,16 +282,12 @@ async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boole
 
 /**
  * After Kora payment:
- * 1) Brevo → customer thank-you / order summary
- * 2) FormSubmit → owner order alert
- *
- * Returns true if the customer email succeeded (owner alert is best-effort).
+ * 1) FormSubmit AJAX → owner alert (browser also sends; no page redirect)
+ * 2) Truehost SMTP → customer thank-you / order summary
  */
 export async function sendOrderPaidEmails(order: OrderEmailPayload): Promise<boolean> {
-  const customerOk = await sendCustomerThankYou(order);
-  // Owner alert should still fire even if customer SMTP fails
   await sendOwnerFormSubmitAlert(order);
-  return customerOk;
+  return await sendCustomerThankYou(order);
 }
 
 export function orderEmailFromCompleteResult(result: {

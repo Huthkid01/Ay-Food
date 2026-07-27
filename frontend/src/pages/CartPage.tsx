@@ -1,14 +1,28 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Trash2, Plus } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useCart } from '../contexts/CartContext';
 import { useToast } from '../components/ui/Toast';
 import { formatCurrency } from '../utils/helpers';
 import { PACK_FEE, packItemsTotal } from '../types';
+import {
+  DEFAULT_DELIVERY_FEE,
+  siteSettingsService,
+} from '../services/site-settings.service';
 
 export default function CartPage() {
   const navigate = useNavigate();
   const { packs, activePacks, subtotal, packFees, removePackItem, clearCart, addPack } = useCart();
   const { showToast } = useToast();
+  const { data: siteSettings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => siteSettingsService.get(),
+    staleTime: 60_000,
+  });
+  const deliveryFeePreview = Math.max(
+    0,
+    Math.round(Number(siteSettings?.delivery_fee ?? DEFAULT_DELIVERY_FEE)),
+  );
 
   // Delivery is chosen at checkout — cart shows items + pack fees only
   const total = subtotal + packFees;
@@ -133,7 +147,8 @@ export default function CartPage() {
             <span>{formatCurrency(packFees)}</span>
           </div>
           <p className="text-xs text-muted">
-            Delivery fee (₦1,500) is added at checkout if you choose delivery.
+            Delivery fee ({formatCurrency(deliveryFeePreview)}) is added at checkout if you choose
+            delivery.
           </p>
           <div className="flex justify-between border-t border-brand-subtle pt-4 text-xl font-bold">
             <span>Total</span>

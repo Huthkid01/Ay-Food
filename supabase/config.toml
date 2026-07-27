@@ -33,3 +33,9 @@ verify_jwt = false
 
 [functions.kora-webhook]
 verify_jwt = false
+
+[functions.brevo-test-email]
+verify_jwt = false
+
+[functions.smtp-test-email]
+verify_jwt = false

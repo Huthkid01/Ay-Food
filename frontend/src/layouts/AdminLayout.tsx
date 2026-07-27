@@ -56,7 +56,7 @@ const contentManagementItems = [
 ];
 
 const navItemsAfterContent = [
-  { href: '/admin/maintenance', label: 'Maintenance', icon: Wrench },
+  { href: '/admin/maintenance', label: 'Store settings', icon: Wrench },
 ];
 
 function AdminLayoutShell() {

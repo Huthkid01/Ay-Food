@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { MapPin } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useSiteContentData } from '../hooks/useSiteContent';
@@ -13,6 +13,10 @@ import { getKoraChargeNgn, getKoraProcessingFeeNgn } from '../utils/kora-fees';
 import { PaymentTransferModal } from '../components/checkout/PaymentTransferModal';
 import { KoraPaymentConfirmModal } from '../components/checkout/KoraPaymentConfirmModal';
 import { useToast } from '../components/ui/Toast';
+import {
+  DEFAULT_DELIVERY_FEE,
+  siteSettingsService,
+} from '../services/site-settings.service';
 import {
   geolocationErrorMessage,
   getGeolocationPermission,
@@ -27,6 +31,7 @@ import {
   startKoraCheckout,
   verifyKoraPayment,
 } from '../services/kora-payment.service';
+import { notifyAdminKoraPaid } from '../services/payment-notify.service';
 
 const checkoutSchema = z
   .object({
@@ -66,6 +71,15 @@ export default function CheckoutPage() {
   const { restaurant } = useSiteContentData();
   const { showToast } = useToast();
   const items = getFlattenedItems();
+  const { data: siteSettings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => siteSettingsService.get(),
+    staleTime: 60_000,
+  });
+  const configuredDeliveryFee = Math.max(
+    0,
+    Math.round(Number(siteSettings?.delivery_fee ?? DEFAULT_DELIVERY_FEE)),
+  );
   const [completed, setCompleted] = useState<CompletedOrder | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -90,7 +104,8 @@ export default function CheckoutPage() {
   });
 
   const orderType = watch('orderType');
-  const deliveryFee = orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
+  const deliveryFee =
+    orderType === 'DELIVERY' && activePacks.length > 0 ? configuredDeliveryFee : 0;
   const orderTotal = itemsTotal + deliveryFee;
   const processingFee = getKoraProcessingFeeNgn(orderTotal);
   const chargeTotal = getKoraChargeNgn(orderTotal);
@@ -136,6 +151,9 @@ export default function CheckoutPage() {
           paid: true,
           paymentProvider: 'Kora',
         };
+
+        // FormSubmit works reliably from the browser (not from Edge Functions).
+        void notifyAdminKoraPaid(whatsapp).catch(() => undefined);
 
         clearCart();
         clearPendingKoraCheckout();
@@ -191,7 +209,7 @@ export default function CheckoutPage() {
   const payWithKora = useMutation({
     mutationFn: async (form: CheckoutForm) => {
       const draftDelivery =
-        form.orderType === 'DELIVERY' && activePacks.length > 0 ? 1500 : 0;
+        form.orderType === 'DELIVERY' && activePacks.length > 0 ? configuredDeliveryFee : 0;
       const draftTotal = subtotal + packFees + draftDelivery;
       const orderNumber = nextOrderNumber();
 

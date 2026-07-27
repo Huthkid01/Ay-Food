@@ -1,5 +1,5 @@
 /**
- * FormSubmit from the visitor’s browser via AJAX — never navigates the app tab.
+ * FormSubmit from the visitor’s browser via AJAX only — never navigates or opens FormSubmit.
  * Docs: https://formsubmit.co/ajax-documentation
  */
 
@@ -22,6 +22,7 @@ function getFormSubmitAjaxUrl(): string {
 
 /**
  * POST order/payment alert to FormSubmit without opening a popup or leaving checkout.
+ * Uses /ajax only — no redirect to formsubmit.co thank-you pages.
  */
 export async function postFormSubmitBrowser(
   fields: Record<string, string>,
@@ -31,6 +32,11 @@ export async function postFormSubmitBrowser(
   }
 
   try {
+    // Strip any accidental redirect hints from callers
+    const { _next: _ignoredNext, ...safeFields } = fields as Record<string, string> & {
+      _next?: string;
+    };
+
     const res = await fetch(getFormSubmitAjaxUrl(), {
       method: 'POST',
       headers: {
@@ -38,7 +44,7 @@ export async function postFormSubmitBrowser(
         Accept: 'application/json',
       },
       body: JSON.stringify({
-        ...fields,
+        ...safeFields,
         _captcha: 'false',
         _template: 'table',
       }),
