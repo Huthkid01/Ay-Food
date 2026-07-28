@@ -13,6 +13,9 @@ export type KoraVerifyResult = {
   paid: boolean;
   orderNumber: string;
   total: number;
+  subtotal?: number;
+  deliveryFee?: number;
+  tax?: number;
   customerName: string;
   customerPhone: string;
   customerEmail: string;

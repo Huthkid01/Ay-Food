@@ -27,9 +27,15 @@ type OrderEmailPayload = {
   customer_email: string;
   order_type: string;
   delivery_address?: string | null;
+  subtotal?: number;
+  tax?: number;
+  delivery_fee?: number;
+  discount?: number;
   total: number;
   items: OrderEmailItem[];
 };
+
+const DEFAULT_PACK_FEE = 300;
 
 function escapeHtml(value: string) {
   return value
@@ -44,21 +50,56 @@ function formatNgn(amount: number) {
   return `NGN ${Math.round(amount).toLocaleString('en-NG')}`;
 }
 
+function normalizePackName(raw?: string | null): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return 'Other items';
+  const match = trimmed.match(/^pack\s*(\d+)$/i);
+  if (match) return `Pack ${Number(match[1])}`;
+  return trimmed;
+}
+
+function packSortKey(name: string): [number, string] {
+  const match = name.match(/^pack\s*(\d+)$/i) || name.match(/(\d+)/);
+  const num = match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+  return [num, name.toLowerCase()];
+}
+
+function comparePackNames(a: string, b: string): number {
+  const [na, la] = packSortKey(a);
+  const [nb, lb] = packSortKey(b);
+  if (na !== nb) return na - nb;
+  return la.localeCompare(lb);
+}
+
+function itemLineTotal(item: OrderEmailItem): number {
+  const qty = item.quantity ?? 1;
+  return Number(item.total_price ?? (item.unit_price ?? 0) * qty) || 0;
+}
+
 function groupItemsByPack(items: OrderEmailItem[]) {
-  const groups: Array<{ packName: string; items: OrderEmailItem[] }> = [];
+  const groups: Array<{ packName: string; items: OrderEmailItem[]; subtotal: number }> = [];
   const indexByName = new Map<string, number>();
 
   for (const item of items) {
-    const packName = (item.pack_name || '').trim() || 'Other items';
+    const packName = normalizePackName(item.pack_name);
     let idx = indexByName.get(packName);
     if (idx === undefined) {
       idx = groups.length;
       indexByName.set(packName, idx);
-      groups.push({ packName, items: [] });
+      groups.push({ packName, items: [], subtotal: 0 });
     }
     groups[idx].items.push(item);
+    groups[idx].subtotal += itemLineTotal(item);
   }
 
+  groups.sort((a, b) => comparePackNames(a.packName, b.packName));
+  for (const group of groups) {
+    group.items.sort((a, b) =>
+      String(a.food_name || '').localeCompare(String(b.food_name || ''), undefined, {
+        sensitivity: 'base',
+      }),
+    );
+  }
   return groups;
 }
 
@@ -69,8 +110,34 @@ function formatItemLine(item: OrderEmailItem) {
       ? ` (${item.portion_name})`
       : '';
   const qty = item.quantity ?? 1;
-  const lineTotal = item.total_price ?? (item.unit_price ?? 0) * qty;
+  const lineTotal = itemLineTotal(item);
   return { name, size, qty, lineTotal };
+}
+
+function sumItems(items: OrderEmailItem[]): number {
+  return items.reduce((sum, item) => sum + itemLineTotal(item), 0);
+}
+
+function deriveOrderTotals(order: OrderEmailPayload) {
+  const itemsTotal = Math.round(sumItems(order.items));
+  const packs = groupItemsByPack(order.items);
+  const packCount = packs.filter((p) => p.packName !== 'Other items').length || packs.length;
+  const orderSubtotal = Math.round(Number(order.subtotal ?? 0));
+  const deliveryFee = Math.round(Number(order.delivery_fee ?? 0));
+  const tax = Math.round(Number(order.tax ?? 0));
+  const discount = Math.round(Number(order.discount ?? 0));
+  const total = Math.round(Number(order.total ?? 0));
+
+  let packFees = orderSubtotal > itemsTotal ? orderSubtotal - itemsTotal : 0;
+  if (packFees <= 0 && packCount > 0) {
+    packFees = packCount * DEFAULT_PACK_FEE;
+  }
+
+  return { itemsTotal, packFees, packCount, deliveryFee, tax, discount, total, packs };
+}
+
+function isDeliveryOrder(order: OrderEmailPayload): boolean {
+  return String(order.order_type || '').toUpperCase() === 'DELIVERY';
 }
 
 function formatItems(items: OrderEmailItem[]) {
@@ -83,11 +150,29 @@ function formatItems(items: OrderEmailItem[]) {
       const { name, size, qty, lineTotal } = formatItemLine(item);
       blocks.push(`  - ${name}${size} x${qty}: ${formatNgn(lineTotal)}`);
     }
+    blocks.push(`  Pack subtotal: ${formatNgn(group.subtotal)}`);
   }
   return blocks.join('\n');
 }
 
-/** Inbox-safe pack summary: stacked sections + simple tables (no CSS grid / cards). */
+function formatTotalsText(order: OrderEmailPayload): string {
+  const t = deriveOrderTotals(order);
+  const lines = [
+    `Items subtotal: ${formatNgn(t.itemsTotal)}`,
+    `Pack fees (${t.packCount} pack${t.packCount === 1 ? '' : 's'}): ${formatNgn(t.packFees)}`,
+  ];
+  if (isDeliveryOrder(order)) {
+    lines.push(`Delivery fee: ${formatNgn(t.deliveryFee)}`);
+  } else {
+    lines.push('Delivery fee: NGN 0 (Pickup)');
+  }
+  if (t.tax > 0) lines.push(`Tax: ${formatNgn(t.tax)}`);
+  if (t.discount > 0) lines.push(`Discount: -${formatNgn(t.discount)}`);
+  lines.push(`Total: ${formatNgn(t.total)}`);
+  return lines.join('\n');
+}
+
+/** Inbox-safe pack summary: Pack 1 → Pack 2 → … with simple tables. */
 function formatItemsHtml(items: OrderEmailItem[]) {
   if (!items.length) {
     return '<p style="margin:0;padding:8px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#555555;">No items</p>';
@@ -97,7 +182,11 @@ function formatItemsHtml(items: OrderEmailItem[]) {
   return groups.map((group) => renderPackSectionHtml(group)).join('');
 }
 
-function renderPackSectionHtml(group: { packName: string; items: OrderEmailItem[] }) {
+function renderPackSectionHtml(group: {
+  packName: string;
+  items: OrderEmailItem[];
+  subtotal: number;
+}) {
   const rows = group.items
     .map((item) => {
       const { name, size, qty, lineTotal } = formatItemLine(item);
@@ -121,6 +210,41 @@ function renderPackSectionHtml(group: { packName: string; items: OrderEmailItem[
       <td align="right" width="96" style="padding:0 0 6px 0;border-bottom:1px solid #dddddd;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#666666;">Amount</td>
     </tr>
     ${rows}
+    <tr>
+      <td colspan="2" style="padding:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#555555;">Pack subtotal</td>
+      <td align="right" style="padding:8px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#111111;">${formatNgn(group.subtotal)}</td>
+    </tr>
+  </table>`;
+}
+
+function formatTotalsHtml(order: OrderEmailPayload): string {
+  const t = deriveOrderTotals(order);
+  const deliveryLabel = isDeliveryOrder(order) ? 'Delivery fee' : 'Delivery fee (Pickup)';
+  const deliveryValue = isDeliveryOrder(order) ? formatNgn(t.deliveryFee) : 'NGN 0';
+
+  const rows = [
+    ['Items subtotal', formatNgn(t.itemsTotal)],
+    [`Pack fees (${t.packCount} pack${t.packCount === 1 ? '' : 's'})`, formatNgn(t.packFees)],
+    [deliveryLabel, deliveryValue],
+  ];
+  if (t.tax > 0) rows.push(['Tax', formatNgn(t.tax)]);
+  if (t.discount > 0) rows.push(['Discount', `-${formatNgn(t.discount)}`]);
+
+  const body = rows
+    .map(
+      ([label, value]) => `<tr>
+      <td style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#555555;">${escapeHtml(label)}</td>
+      <td align="right" style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222222;">${escapeHtml(value)}</td>
+    </tr>`,
+    )
+    .join('');
+
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+    ${body}
+    <tr>
+      <td style="padding:10px 0 0 0;border-top:1px solid #dddddd;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#111111;">Total</td>
+      <td align="right" style="padding:10px 0 0 0;border-top:1px solid #dddddd;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#111111;">${formatNgn(t.total)}</td>
+    </tr>
   </table>`;
 }
 
@@ -145,7 +269,6 @@ function getFromAddress() {
     Deno.env.get('SMTP_FROM_EMAIL')?.trim() ||
     Deno.env.get('SMTP_USER')?.trim() ||
     'contact@ayfoodpalace.com';
-  // Readable display name improves inbox trust (keep env override if set).
   const name = Deno.env.get('SMTP_FROM_NAME')?.trim() || 'Ay Food Palace';
   return { email, name, header: `"${name.replace(/"/g, '')}" <${email}>` };
 }
@@ -187,17 +310,21 @@ function buildCustomerEmail(order: OrderEmailPayload) {
   const trackUrl = `${appUrl}/track?order=${encodeURIComponent(order.order_number)}`;
   const itemsText = formatItems(order.items);
   const itemsHtml = formatItemsHtml(order.items);
-  const orderType = order.order_type === 'DELIVERY' ? 'Delivery' : 'Pickup';
+  const totalsText = formatTotalsText(order);
+  const totalsHtml = formatTotalsHtml(order);
+  const delivery = isDeliveryOrder(order);
+  const orderType = delivery ? 'Delivery' : 'Pickup';
   const customerName = (order.customer_name || 'there').trim() || 'there';
   const safeName = escapeHtml(customerName);
   const safeOrder = escapeHtml(order.order_number);
   const addressLine =
-    order.order_type === 'DELIVERY' && order.delivery_address?.trim()
+    delivery && order.delivery_address?.trim()
       ? `Delivery address: ${order.delivery_address.trim()}`
-      : null;
-  const safeAddress = addressLine ? escapeHtml(addressLine) : null;
+      : delivery
+        ? 'Delivery address: —'
+        : 'Fulfillment: Pickup (customer collects from restaurant)';
+  const safeAddress = escapeHtml(addressLine);
 
-  // Calm transactional subject — avoids promo / spammy wording.
   const subject = `Your Ay Food Palace order ${order.order_number}`;
 
   const text = [
@@ -213,18 +340,15 @@ function buildCustomerEmail(order: OrderEmailPayload) {
     'Order summary:',
     itemsText,
     '',
-    `Total: ${formatNgn(order.total)}`,
+    totalsText,
     '',
     'Need help? Reply to this email or visit https://www.ayfoodpalace.com',
     '',
     'Ay Food Palace',
     'Omoleye, Ogijo, Ogun State, Nigeria',
     'contact@ayfoodpalace.com',
-  ]
-    .filter((line) => line !== null)
-    .join('\n');
+  ].join('\n');
 
-  // Simple table layout + multipart text twin — better inbox placement than flashy HTML.
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -260,7 +384,7 @@ function buildCustomerEmail(order: OrderEmailPayload) {
             <td style="padding:0 24px 16px 24px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#333333;">
               <strong>Order number:</strong> ${safeOrder}<br>
               <strong>Order type:</strong> ${orderType}<br>
-              ${safeAddress ? `${safeAddress}<br>` : ''}
+              ${safeAddress}<br>
               <a href="${trackUrl}" style="color:#c2410c;text-decoration:underline;">Track your order</a>
             </td>
           </tr>
@@ -275,8 +399,8 @@ function buildCustomerEmail(order: OrderEmailPayload) {
             </td>
           </tr>
           <tr>
-            <td style="padding:8px 24px 24px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111111;">
-              <strong>Total:</strong> ${formatNgn(order.total)}
+            <td style="padding:8px 24px 24px 24px;">
+              ${totalsHtml}
             </td>
           </tr>
           <tr>
@@ -324,7 +448,6 @@ async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> 
       html: content.html,
       messageId,
       priority: 'normal',
-      // Transactional receipt headers — avoid marketing / spammy signals.
       headers: {
         'Auto-Submitted': 'auto-generated',
         'X-Auto-Response-Suppress': 'All',
@@ -345,11 +468,12 @@ async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boole
   const ownerEmail = getOwnerInbox();
   const appUrl = getAppUrl();
   const itemsText = formatItems(order.items);
-  const orderType = order.order_type === 'DELIVERY' ? 'Delivery' : 'Pickup';
-  const address =
-    order.order_type === 'DELIVERY'
-      ? order.delivery_address?.trim() || '—'
-      : 'Pickup (no delivery address)';
+  const totalsText = formatTotalsText(order);
+  const delivery = isDeliveryOrder(order);
+  const orderType = delivery ? 'Delivery' : 'Pickup';
+  const address = delivery
+    ? order.delivery_address?.trim() || '—'
+    : 'Pickup (no delivery address)';
 
   try {
     const res = await fetch(`https://formsubmit.co/ajax/${ownerEmail}`, {
@@ -372,6 +496,7 @@ async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boole
         address,
         amount_paid: formatNgn(order.total),
         order_items: itemsText,
+        fees: totalsText,
       }),
     });
 
@@ -418,6 +543,10 @@ export function orderEmailFromCompleteResult(result: {
     customer_email: String(o.customer_email ?? ''),
     order_type: String(o.order_type ?? 'PICKUP'),
     delivery_address: (o.delivery_address as string | null) ?? null,
+    subtotal: Number(o.subtotal ?? 0),
+    tax: Number(o.tax ?? 0),
+    delivery_fee: Number(o.delivery_fee ?? 0),
+    discount: Number(o.discount ?? 0),
     total: Number(o.total ?? 0),
     items: result.items ?? [],
   };

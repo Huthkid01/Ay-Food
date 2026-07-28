@@ -1,4 +1,6 @@
 import { formatCurrency } from './helpers';
+import { comparePackNames, normalizePackName } from './pack-groups';
+import { PACK_FEE } from '../types';
 
 export type WhatsAppOrderItem = {
   foodName: string;
@@ -36,9 +38,52 @@ export function extractWhatsAppPhone(whatsappUrl: string, fallback = '2348173097
   return fallback;
 }
 
+function groupWhatsAppItemsByPack(items: WhatsAppOrderItem[]) {
+  const groups: Array<{ packName: string; items: WhatsAppOrderItem[] }> = [];
+  const indexByName = new Map<string, number>();
+
+  for (const item of items) {
+    const packName = normalizePackName(item.packName);
+    let idx = indexByName.get(packName);
+    if (idx === undefined) {
+      idx = groups.length;
+      indexByName.set(packName, idx);
+      groups.push({ packName, items: [] });
+    }
+    groups[idx].items.push(item);
+  }
+
+  groups.sort((a, b) => comparePackNames(a.packName, b.packName));
+  for (const group of groups) {
+    group.items.sort((a, b) =>
+      a.foodName.localeCompare(b.foodName, undefined, { sensitivity: 'base' }),
+    );
+  }
+  return groups;
+}
+
+function deriveWhatsAppFees(order: WhatsAppOrderDetails) {
+  const packs = groupWhatsAppItemsByPack(order.items);
+  const packCount = packs.filter((p) => p.packName !== 'Other items').length || packs.length;
+  const itemsTotal = order.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const packFees =
+    order.packFees != null && order.packFees >= 0
+      ? order.packFees
+      : order.subtotal != null && order.subtotal > itemsTotal
+        ? Math.round(order.subtotal - itemsTotal)
+        : packCount * PACK_FEE;
+  const deliveryFee =
+    order.deliveryFee != null
+      ? order.deliveryFee
+      : order.orderType === 'DELIVERY'
+        ? 0
+        : 0;
+  return { packs, packCount, itemsTotal, packFees, deliveryFee };
+}
+
 /**
  * Friendly WhatsApp order note for the kitchen.
- * Keeps name, phone, email, address, items by pack, and total — skips empty optionals.
+ * Keeps name, phone, email, address, items by pack (1→2→3…), fees, and total.
  */
 export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
   const lines: string[] = [
@@ -58,7 +103,7 @@ export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
   }
 
   if (order.orderType === 'DELIVERY') {
-    lines.push(`Option: Delivery`);
+    lines.push(`Order type: Delivery`);
     if (order.deliveryAddress?.trim()) {
       lines.push(`Address: ${order.deliveryAddress.trim()}`);
     }
@@ -66,25 +111,37 @@ export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
       lines.push(`Note: ${order.deliveryInstructions.trim()}`);
     }
   } else {
-    lines.push(`Option: Pickup`);
+    lines.push(`Order type: Pickup`);
   }
+
+  const fees = deriveWhatsAppFees(order);
 
   if (order.items.length > 0) {
     lines.push('', 'My order:');
-    const packs = groupWhatsAppItemsByPack(order.items);
-    for (const pack of packs) {
+    for (const pack of fees.packs) {
       lines.push('', `*${pack.packName}*`);
       for (const item of pack.items) {
         const size =
           item.portionName && item.portionName.toLowerCase() !== 'standard'
             ? ` (${item.portionName})`
             : '';
-        lines.push(`• ${item.foodName}${size} x${item.quantity}`);
+        lines.push(
+          `• ${item.foodName}${size} x${item.quantity} — ${formatCurrency(item.unitPrice * item.quantity)}`,
+        );
       }
     }
   }
 
-  lines.push('', `Total: ${formatCurrency(order.total)}`);
+  lines.push('', `Items subtotal: ${formatCurrency(fees.itemsTotal)}`);
+  lines.push(
+    `Pack fees (${fees.packCount} pack${fees.packCount === 1 ? '' : 's'}): ${formatCurrency(fees.packFees)}`,
+  );
+  if (order.orderType === 'DELIVERY') {
+    lines.push(`Delivery fee: ${formatCurrency(order.deliveryFee ?? fees.deliveryFee)}`);
+  } else {
+    lines.push('Delivery fee: ₦0 (Pickup)');
+  }
+  lines.push(`Total: ${formatCurrency(order.total)}`);
 
   if (order.paid && order.paymentProvider?.toLowerCase() === 'kora') {
     lines.push('', `I've paid via Kora. Looking forward to my order — thank you! 🙏`);
@@ -97,27 +154,9 @@ export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
   return lines.join('\n');
 }
 
-function groupWhatsAppItemsByPack(items: WhatsAppOrderItem[]) {
-  const groups: Array<{ packName: string; items: WhatsAppOrderItem[] }> = [];
-  const indexByName = new Map<string, number>();
-
-  for (const item of items) {
-    const packName = item.packName?.trim() || 'Other items';
-    let idx = indexByName.get(packName);
-    if (idx === undefined) {
-      idx = groups.length;
-      indexByName.set(packName, idx);
-      groups.push({ packName, items: [] });
-    }
-    groups[idx].items.push(item);
-  }
-
-  return groups;
-}
-
 export function buildOrderWhatsAppUrl(
   whatsappUrl: string,
-  order: WhatsAppOrderDetails
+  order: WhatsAppOrderDetails,
 ): string {
   const phone = extractWhatsAppPhone(whatsappUrl);
   const text = buildOrderWhatsAppMessage(order);
@@ -126,10 +165,9 @@ export function buildOrderWhatsAppUrl(
 
 export function openOrderOnWhatsApp(
   whatsappUrl: string,
-  order: WhatsAppOrderDetails
+  order: WhatsAppOrderDetails,
 ): void {
   const url = buildOrderWhatsAppUrl(whatsappUrl, order);
-  // Open WhatsApp only — do not navigate this tab to Track Order
   const opened = window.open(url, '_blank', 'noopener,noreferrer');
   if (!opened) {
     window.location.assign(url);

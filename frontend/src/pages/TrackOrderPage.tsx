@@ -5,6 +5,7 @@ import { Check, Clock, Package, Truck, Home } from 'lucide-react';
 import { getOrderByNumber } from '../services/orders.service';
 import type { AdminOrderItem } from '../services/admin-store';
 import { formatCurrency } from '../utils/helpers';
+import { comparePackNames, normalizePackName } from '../utils/pack-groups';
 
 const STATUS_STEPS = [
   { key: 'RECEIVED', label: 'Order Received', icon: Check },
@@ -19,7 +20,7 @@ function groupItemsByPack(items: AdminOrderItem[]) {
   const indexByName = new Map<string, number>();
 
   for (const item of items) {
-    const packName = item.packName?.trim() || 'Other items';
+    const packName = normalizePackName(item.packName);
     let idx = indexByName.get(packName);
     if (idx === undefined) {
       idx = groups.length;
@@ -30,6 +31,7 @@ function groupItemsByPack(items: AdminOrderItem[]) {
     groups[idx].subtotal += Number(item.totalPrice) || 0;
   }
 
+  groups.sort((a, b) => comparePackNames(a.packName, b.packName));
   return groups;
 }
 
@@ -143,14 +145,27 @@ export default function TrackOrderPage() {
       {showResults && order && (
         <div className="animate-fade-up">
           <div className="mb-6 rounded-xl border border-white/10 bg-brand-dark-light p-4">
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <div>
                 <p className="text-sm text-white/60">Order Number</p>
                 <p className="font-mono font-bold text-brand-gold">{order.orderNumber}</p>
+                <p className="mt-1 text-xs text-white/50">
+                  {order.orderType === 'DELIVERY' ? 'Delivery' : 'Pickup'}
+                  {order.orderType === 'DELIVERY' && order.deliveryAddress
+                    ? ` · ${order.deliveryAddress}`
+                    : ''}
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-white/60">Total</p>
                 <p className="font-bold">{formatCurrency(order.total)}</p>
+                {order.deliveryFee > 0 ? (
+                  <p className="mt-1 text-xs text-white/45">
+                    incl. {formatCurrency(order.deliveryFee)} delivery
+                  </p>
+                ) : order.orderType === 'PICKUP' ? (
+                  <p className="mt-1 text-xs text-white/45">No delivery fee</p>
+                ) : null}
               </div>
             </div>
           </div>

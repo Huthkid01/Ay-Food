@@ -1,15 +1,15 @@
 import { formatCurrency } from '../utils/helpers';
+import { comparePackNames, normalizePackName } from '../utils/pack-groups';
+import { PACK_FEE } from '../types';
 import type { WhatsAppOrderDetails } from '../utils/whatsapp-order';
 import { postFormSubmitBrowser, type FormSubmitResult } from '../lib/formsubmit-browser';
 
-function formatItems(order: WhatsAppOrderDetails): string {
-  if (order.items.length === 0) return '—';
-
+function groupItems(order: WhatsAppOrderDetails) {
   const groups: Array<{ packName: string; items: WhatsAppOrderDetails['items'] }> = [];
   const indexByName = new Map<string, number>();
 
   for (const item of order.items) {
-    const packName = item.packName?.trim() || 'Other items';
+    const packName = normalizePackName(item.packName);
     let idx = indexByName.get(packName);
     if (idx === undefined) {
       idx = groups.length;
@@ -19,7 +19,14 @@ function formatItems(order: WhatsAppOrderDetails): string {
     groups[idx].items.push(item);
   }
 
-  return groups
+  groups.sort((a, b) => comparePackNames(a.packName, b.packName));
+  return groups;
+}
+
+function formatItems(order: WhatsAppOrderDetails): string {
+  if (order.items.length === 0) return '—';
+
+  return groupItems(order)
     .map((group) => {
       const lines = group.items.map((item) => {
         const size =
@@ -31,6 +38,29 @@ function formatItems(order: WhatsAppOrderDetails): string {
       return `${group.packName}:\n${lines.join('\n')}`;
     })
     .join('\n\n');
+}
+
+function formatFees(order: WhatsAppOrderDetails): string {
+  const packs = groupItems(order);
+  const packCount = packs.filter((p) => p.packName !== 'Other items').length || packs.length;
+  const itemsTotal = order.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  const packFees =
+    order.packFees != null && order.packFees >= 0
+      ? order.packFees
+      : order.subtotal != null && order.subtotal > itemsTotal
+        ? Math.round(order.subtotal - itemsTotal)
+        : packCount * PACK_FEE;
+  const lines = [
+    `Items subtotal: ${formatCurrency(itemsTotal)}`,
+    `Pack fees (${packCount}): ${formatCurrency(packFees)}`,
+  ];
+  if (order.orderType === 'DELIVERY') {
+    lines.push(`Delivery fee: ${formatCurrency(order.deliveryFee ?? 0)}`);
+  } else {
+    lines.push('Delivery fee: ₦0 (Pickup)');
+  }
+  lines.push(`Total: ${formatCurrency(order.total)}`);
+  return lines.join('\n');
 }
 
 /** Owner-facing FormSubmit fields only — no tracking URL or internal metadata. */
@@ -51,6 +81,7 @@ function buildOwnerAlertFields(order: WhatsAppOrderDetails): Record<string, stri
     address,
     amount_paid: formatCurrency(order.total),
     order_items: formatItems(order),
+    fees: formatFees(order),
   };
 }
 

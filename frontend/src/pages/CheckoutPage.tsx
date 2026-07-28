@@ -172,6 +172,16 @@ export default function CheckoutPage() {
           return;
         }
 
+        const itemsTotal = (result.items ?? []).reduce(
+          (sum, i) => sum + Number(i.total_price ?? (i.unit_price ?? 0) * (i.quantity ?? 1)),
+          0,
+        );
+        const orderSubtotal = Number(result.subtotal ?? 0);
+        const packFees =
+          orderSubtotal > itemsTotal
+            ? Math.round(orderSubtotal - itemsTotal)
+            : undefined;
+
         const whatsapp: WhatsAppOrderDetails = {
           orderNumber: result.orderNumber,
           customerName: result.customerName,
@@ -187,6 +197,10 @@ export default function CheckoutPage() {
             unitPrice: i.unit_price ?? 0,
             packName: i.pack_name ?? undefined,
           })),
+          subtotal: result.subtotal,
+          packFees,
+          deliveryFee: result.deliveryFee,
+          tax: result.tax,
           total: result.total,
           paid: true,
           paymentProvider: 'Kora',
