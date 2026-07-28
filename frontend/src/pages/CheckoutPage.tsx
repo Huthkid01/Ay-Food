@@ -68,6 +68,16 @@ function nextOrderNumber() {
   return `AY-${Date.now().toString().slice(-8)}`;
 }
 
+/** Rough bike ride time in Ogijo / Ikorodu traffic (not including kitchen prep). */
+function estimateRideMinutes(distanceKm: number): string {
+  if (distanceKm <= 2.5) return '10–15';
+  if (distanceKm <= 5) return '15–25';
+  if (distanceKm <= 8) return '25–40';
+  if (distanceKm <= 12) return '35–55';
+  if (distanceKm <= 18) return '50–80';
+  return '60+';
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -112,15 +122,17 @@ export default function CheckoutPage() {
   });
 
   const orderType = watch('orderType');
+  const needsGpsForDelivery = orderType === 'DELIVERY' && activePacks.length > 0 && !deliveryPoint;
   const distanceResult =
     orderType === 'DELIVERY' && activePacks.length > 0 && deliveryPoint
       ? computeDeliveryFee(deliveryRules, deliveryPoint.lat, deliveryPoint.lon)
       : null;
   const deliveryFee =
-    orderType === 'DELIVERY' && activePacks.length > 0
-      ? distanceResult?.fee ?? Math.round(Number(siteSettings?.delivery_fee ?? 1500))
+    orderType === 'DELIVERY' && activePacks.length > 0 && distanceResult && !distanceResult.manualQuoteOnly
+      ? distanceResult.fee
       : 0;
   const manualQuoteOnly = Boolean(distanceResult?.manualQuoteOnly);
+  const canPayDelivery = orderType !== 'DELIVERY' || (Boolean(deliveryPoint) && !manualQuoteOnly);
   const orderTotal = itemsTotal + deliveryFee;
   const processingFee = getKoraProcessingFeeNgn(orderTotal);
   const chargeTotal = getKoraChargeNgn(orderTotal);
@@ -225,6 +237,12 @@ export default function CheckoutPage() {
 
   const payWithKora = useMutation({
     mutationFn: async (form: CheckoutForm) => {
+      if (form.orderType === 'DELIVERY' && !deliveryPoint) {
+        throw new Error('Tap “Use current location” so we can calculate your delivery fee');
+      }
+      if (form.orderType === 'DELIVERY' && manualQuoteOnly) {
+        throw new Error('This area needs a special delivery quote — contact us on WhatsApp first');
+      }
       const draftDelivery =
         form.orderType === 'DELIVERY' && activePacks.length > 0 ? deliveryFee : 0;
       const draftTotal = subtotal + packFees + draftDelivery;
@@ -275,6 +293,14 @@ export default function CheckoutPage() {
   });
 
   function openPaymentConfirm(form: CheckoutForm) {
+    if (form.orderType === 'DELIVERY' && !deliveryPoint) {
+      showToast('Tap “Use current location” to calculate your delivery fee', 'error');
+      return;
+    }
+    if (form.orderType === 'DELIVERY' && manualQuoteOnly) {
+      showToast('This area needs WhatsApp confirmation for special delivery', 'error');
+      return;
+    }
     setPendingForm(form);
     setConfirmOpen(true);
   }
@@ -449,6 +475,7 @@ export default function CheckoutPage() {
                   id="checkout-address"
                   {...register('deliveryAddress')}
                   rows={3}
+                  placeholder="Tap “Use current location” first, then edit street / landmark if needed"
                   className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
                 />
                 {mapsUrl && (
@@ -470,12 +497,18 @@ export default function CheckoutPage() {
                       : ''}
                   </p>
                 )}
+                {needsGpsForDelivery && (
+                  <p className="mt-2 rounded-xl border border-brand-gold/35 bg-brand-gold/10 px-3 py-2 text-xs leading-relaxed text-brand-gold/95">
+                    Tap <span className="font-semibold">Use current location</span> so we can
+                    calculate your exact delivery fee from Omoleye. You can still edit the address
+                    after it fills.
+                  </p>
+                )}
                 {locationBlocked && (
                   <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100/90">
                     Location access is blocked for this site. Open your browser site settings → set
                     Location to <span className="font-semibold">Allow</span>, then tap{' '}
-                    <span className="font-semibold">Use current location</span> again. You can also
-                    type your address below.
+                    <span className="font-semibold">Use current location</span> again.
                   </p>
                 )}
                 {errors.deliveryAddress && (
@@ -537,8 +570,23 @@ export default function CheckoutPage() {
             )}
             <div className="flex justify-between text-secondary">
               <span>{orderType === 'DELIVERY' ? 'Delivery' : 'Delivery (pickup — free)'}</span>
-              <span>{formatCurrency(deliveryFee)}</span>
+              <span>
+                {orderType === 'DELIVERY' && needsGpsForDelivery
+                  ? 'Set location'
+                  : formatCurrency(deliveryFee)}
+              </span>
             </div>
+            {needsGpsForDelivery && (
+              <p className="rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-xs text-brand-gold/95">
+                Use current location to get your delivery fee and estimated time.
+              </p>
+            )}
+            {distanceResult && !distanceResult.manualQuoteOnly && (
+              <p className="text-xs text-white/45">
+                About {estimateRideMinutes(distanceResult.distanceKm)} mins ride from kitchen
+                (traffic can change this).
+              </p>
+            )}
             {distanceResult?.requiresConfirm && (
               <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
                 {distanceResult.note ||
