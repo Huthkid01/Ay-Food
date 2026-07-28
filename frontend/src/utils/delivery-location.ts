@@ -5,6 +5,9 @@ export type ResolvedDeliveryAddress = {
   lat: number;
   lon: number;
   mapsUrl: string;
+  city?: string | null;
+  state?: string | null;
+  landmark?: string | null;
 };
 
 export type GeolocationPermissionState = PermissionState | 'unsupported';
@@ -81,6 +84,37 @@ async function reverseGeocodeAddress(lat: number, lon: number): Promise<string |
   }
 }
 
+type ReverseGeoMeta = {
+  city: string | null;
+  state: string | null;
+  landmark: string | null;
+};
+
+async function reverseGeocodeMeta(lat: number, lon: number): Promise<ReverseGeoMeta> {
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse');
+    url.searchParams.set('lat', String(lat));
+    url.searchParams.set('lon', String(lon));
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('zoom', '18');
+    url.searchParams.set('addressdetails', '1');
+    const res = await fetch(url.toString(), {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return { city: null, state: null, landmark: null };
+    const data = (await res.json()) as { address?: Record<string, string | undefined> };
+    const addr = data.address ?? {};
+    return {
+      city: addr.city || addr.town || addr.village || addr.county || null,
+      state: addr.state || addr.state_district || null,
+      landmark: addr.road || addr.neighbourhood || addr.suburb || addr.amenity || null,
+    };
+  } catch {
+    return { city: null, state: null, landmark: null };
+  }
+}
+
 /**
  * Ask for GPS permission (browser dialog when state is “prompt”),
  * reverse-geocode, and return a delivery address + Maps link.
@@ -90,17 +124,31 @@ export async function resolveDeliveryAddressFromGps(): Promise<ResolvedDeliveryA
   const { latitude: lat, longitude: lon } = pos.coords;
   const mapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
 
-  const address = await reverseGeocodeAddress(lat, lon);
+  const [address, meta] = await Promise.all([
+    reverseGeocodeAddress(lat, lon),
+    reverseGeocodeMeta(lat, lon),
+  ]);
   if (!address) {
     return {
       address: `Near ${lat.toFixed(5)}, ${lon.toFixed(5)} (Ogijo area — please add street / landmark)`,
       lat,
       lon,
       mapsUrl,
+      city: meta.city,
+      state: meta.state,
+      landmark: meta.landmark,
     };
   }
 
-  return { address, lat, lon, mapsUrl };
+  return {
+    address,
+    lat,
+    lon,
+    mapsUrl,
+    city: meta.city,
+    state: meta.state,
+    landmark: meta.landmark,
+  };
 }
 
 export function geolocationErrorMessage(err: unknown): string {

@@ -14,7 +14,6 @@ import { PaymentTransferModal } from '../components/checkout/PaymentTransferModa
 import { KoraPaymentConfirmModal } from '../components/checkout/KoraPaymentConfirmModal';
 import { useToast } from '../components/ui/Toast';
 import {
-  DEFAULT_DELIVERY_FEE,
   siteSettingsService,
 } from '../services/site-settings.service';
 import {
@@ -32,6 +31,11 @@ import {
   verifyKoraPayment,
 } from '../services/kora-payment.service';
 import { notifyAdminKoraPaid } from '../services/payment-notify.service';
+import {
+  computeDeliveryFee,
+  DEFAULT_DELIVERY_RULES,
+  normalizeDeliveryRules,
+} from '../utils/delivery-fee';
 
 const checkoutSchema = z
   .object({
@@ -76,10 +80,7 @@ export default function CheckoutPage() {
     queryFn: () => siteSettingsService.get(),
     staleTime: 60_000,
   });
-  const configuredDeliveryFee = Math.max(
-    0,
-    Math.round(Number(siteSettings?.delivery_fee ?? DEFAULT_DELIVERY_FEE)),
-  );
+  const deliveryRules = normalizeDeliveryRules(siteSettings?.delivery_rules ?? DEFAULT_DELIVERY_RULES);
   const [completed, setCompleted] = useState<CompletedOrder | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -87,6 +88,13 @@ export default function CheckoutPage() {
   const [locating, setLocating] = useState(false);
   const [mapsUrl, setMapsUrl] = useState<string | null>(null);
   const [locationBlocked, setLocationBlocked] = useState(false);
+  const [deliveryPoint, setDeliveryPoint] = useState<{
+    lat: number;
+    lon: number;
+    city?: string | null;
+    state?: string | null;
+    landmark?: string | null;
+  } | null>(null);
 
   const itemsTotal = subtotal + packFees;
 
@@ -104,8 +112,15 @@ export default function CheckoutPage() {
   });
 
   const orderType = watch('orderType');
+  const distanceResult =
+    orderType === 'DELIVERY' && activePacks.length > 0 && deliveryPoint
+      ? computeDeliveryFee(deliveryRules, deliveryPoint.lat, deliveryPoint.lon)
+      : null;
   const deliveryFee =
-    orderType === 'DELIVERY' && activePacks.length > 0 ? configuredDeliveryFee : 0;
+    orderType === 'DELIVERY' && activePacks.length > 0
+      ? distanceResult?.fee ?? Math.round(Number(siteSettings?.delivery_fee ?? 1500))
+      : 0;
+  const manualQuoteOnly = Boolean(distanceResult?.manualQuoteOnly);
   const orderTotal = itemsTotal + deliveryFee;
   const processingFee = getKoraProcessingFeeNgn(orderTotal);
   const chargeTotal = getKoraChargeNgn(orderTotal);
@@ -192,9 +207,11 @@ export default function CheckoutPage() {
         return;
       }
 
-      const { address, mapsUrl: pinUrl } = await resolveDeliveryAddressFromGps();
+      const { address, mapsUrl: pinUrl, lat, lon, city, state, landmark } =
+        await resolveDeliveryAddressFromGps();
       setValue('deliveryAddress', address, { shouldValidate: true });
       setMapsUrl(pinUrl);
+      setDeliveryPoint({ lat, lon, city, state, landmark });
       showToast('Location filled — you can edit the address if needed');
     } catch (err) {
       const denied =
@@ -209,7 +226,7 @@ export default function CheckoutPage() {
   const payWithKora = useMutation({
     mutationFn: async (form: CheckoutForm) => {
       const draftDelivery =
-        form.orderType === 'DELIVERY' && activePacks.length > 0 ? configuredDeliveryFee : 0;
+        form.orderType === 'DELIVERY' && activePacks.length > 0 ? deliveryFee : 0;
       const draftTotal = subtotal + packFees + draftDelivery;
       const orderNumber = nextOrderNumber();
 
@@ -330,6 +347,11 @@ export default function CheckoutPage() {
     );
   }
 
+  const locationHint =
+    deliveryPoint && orderType === 'DELIVERY'
+      ? [deliveryPoint.landmark, deliveryPoint.city, deliveryPoint.state].filter(Boolean).join(', ')
+      : null;
+
   return (
     <div className="site-container max-w-5xl pb-28 pt-8 sm:pb-12 sm:pt-10">
       <h1 className="mb-8 font-display text-4xl font-semibold tracking-tight sm:mb-10">
@@ -440,6 +462,14 @@ export default function CheckoutPage() {
                     Open pin in Google Maps
                   </a>
                 )}
+                {locationHint && (
+                  <p className="mt-1 text-xs text-white/45">
+                    Detected area: {locationHint}
+                    {distanceResult
+                      ? ` · ${distanceResult.distanceKm.toFixed(1)} km from ${deliveryRules.origin.label}`
+                      : ''}
+                  </p>
+                )}
                 {locationBlocked && (
                   <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100/90">
                     Location access is blocked for this site. Open your browser site settings → set
@@ -509,6 +539,22 @@ export default function CheckoutPage() {
               <span>{orderType === 'DELIVERY' ? 'Delivery' : 'Delivery (pickup — free)'}</span>
               <span>{formatCurrency(deliveryFee)}</span>
             </div>
+            {distanceResult?.requiresConfirm && (
+              <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+                {distanceResult.note ||
+                  'Long-distance delivery: please confirm by call/WhatsApp before payment.'}
+              </p>
+            )}
+            {manualQuoteOnly && restaurant.whatsapp ? (
+              <a
+                href={restaurant.whatsapp}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex text-xs font-medium text-brand-gold hover:underline"
+              >
+                Contact on WhatsApp to confirm special delivery
+              </a>
+            ) : null}
             <div className="flex justify-between border-t border-brand-subtle pt-3 text-lg font-bold">
               <span>Total</span>
               <span className="text-brand-gold">{formatCurrency(chargeTotal)}</span>
@@ -516,23 +562,31 @@ export default function CheckoutPage() {
           </div>
           <button
             type="submit"
-            disabled={payWithKora.isPending}
+            disabled={payWithKora.isPending || manualQuoteOnly}
             className="btn-primary btn-ripple mt-6 hidden w-full py-3.5 sm:flex disabled:opacity-60"
           >
-            {payWithKora.isPending ? 'Starting Kora…' : 'Pay with Kora'}
+            {manualQuoteOnly
+              ? 'Special Delivery — Contact on WhatsApp'
+              : payWithKora.isPending
+                ? 'Starting Kora…'
+                : 'Pay with Kora'}
           </button>
         </div>
 
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 w-[min(calc(100vw-5.5rem),20rem)] sm:hidden lg:col-span-2">
           <button
             type="submit"
-            disabled={payWithKora.isPending}
+            disabled={payWithKora.isPending || manualQuoteOnly}
             className="glass-panel flex w-full items-center justify-between gap-3 rounded-2xl p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)] disabled:opacity-60"
             aria-label="Pay with Kora"
           >
             <span className="min-w-0 text-left">
               <span className="block text-sm font-semibold text-white">
-                {payWithKora.isPending ? 'Starting Kora…' : 'Pay with Kora'}
+                {manualQuoteOnly
+                  ? 'Special Delivery'
+                  : payWithKora.isPending
+                    ? 'Starting Kora…'
+                    : 'Pay with Kora'}
               </span>
               <span className="block text-xs text-secondary">{formatCurrency(chargeTotal)}</span>
             </span>

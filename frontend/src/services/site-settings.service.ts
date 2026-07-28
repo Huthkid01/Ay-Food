@@ -3,6 +3,10 @@ import {
   DEFAULT_MAINTENANCE_MESSAGE,
   type SiteSettings,
 } from './site-settings.types';
+import {
+  DEFAULT_DELIVERY_RULES,
+  normalizeDeliveryRules,
+} from '../utils/delivery-fee';
 
 export type { SiteSettings } from './site-settings.types';
 export {
@@ -17,6 +21,7 @@ const defaults = (): SiteSettings => ({
   maintenance_enabled: false,
   maintenance_message: DEFAULT_MAINTENANCE_MESSAGE,
   delivery_fee: DEFAULT_DELIVERY_FEE,
+  delivery_rules: DEFAULT_DELIVERY_RULES,
 });
 
 function normalize(row: Partial<SiteSettings> | null | undefined): SiteSettings {
@@ -27,6 +32,7 @@ function normalize(row: Partial<SiteSettings> | null | undefined): SiteSettings 
       String(row?.maintenance_message ?? '').trim() || DEFAULT_MAINTENANCE_MESSAGE,
     delivery_fee:
       Number.isFinite(fee) && fee >= 0 ? fee : DEFAULT_DELIVERY_FEE,
+    delivery_rules: normalizeDeliveryRules(row?.delivery_rules),
   };
 }
 
@@ -55,7 +61,7 @@ export const siteSettingsService = {
     if (isSupabaseConfigured()) {
       const { data, error } = await supabase
         .from('site_settings')
-        .select('maintenance_enabled, maintenance_message, delivery_fee')
+        .select('maintenance_enabled, maintenance_message, delivery_fee, delivery_rules')
         .eq('id', 'main')
         .maybeSingle();
       if (!error && data) {
@@ -77,11 +83,13 @@ export const siteSettingsService = {
         p_maintenance_enabled: next.maintenance_enabled,
         p_maintenance_message: next.maintenance_message,
         p_delivery_fee: next.delivery_fee,
+        p_delivery_rules: next.delivery_rules,
       });
       const saved = normalize({
         maintenance_enabled: Boolean(row.maintenance_enabled),
         maintenance_message: String(row.maintenance_message ?? next.maintenance_message),
         delivery_fee: Number(row.delivery_fee ?? next.delivery_fee),
+        delivery_rules: row.delivery_rules ?? next.delivery_rules,
       });
       writeCache(saved);
       return saved;
