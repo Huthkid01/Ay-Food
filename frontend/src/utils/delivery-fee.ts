@@ -71,23 +71,24 @@ export function normalizeDeliveryRules(raw: unknown): DeliveryRules {
   const obj = raw as Record<string, unknown>;
   const originRaw = (obj.origin ?? {}) as Record<string, unknown>;
   const bandsRaw = Array.isArray(obj.bands) ? obj.bands : fallback.bands;
-  const bands = bandsRaw
-    .map((b) => {
-      const band = b as Record<string, unknown>;
-      const minKm = Number(band.minKm);
-      const maxKm = Number(band.maxKm);
-      const fee = Math.round(Number(band.fee));
-      if (!Number.isFinite(minKm) || !Number.isFinite(maxKm) || !Number.isFinite(fee)) return null;
-      if (minKm < 0 || maxKm <= minKm || fee < 0) return null;
-      return {
-        minKm,
-        maxKm,
-        fee,
-        requiresConfirm: Boolean(band.requiresConfirm),
-      } satisfies DeliveryBand;
-    })
-    .filter((b): b is DeliveryBand => Boolean(b))
-    .sort((a, b) => a.minKm - b.minKm);
+
+  const bands: DeliveryBand[] = [];
+  for (const item of bandsRaw) {
+    if (!item || typeof item !== 'object') continue;
+    const band = item as Record<string, unknown>;
+    const minKm = Number(band.minKm);
+    const maxKm = Number(band.maxKm);
+    const fee = Math.round(Number(band.fee));
+    if (!Number.isFinite(minKm) || !Number.isFinite(maxKm) || !Number.isFinite(fee)) continue;
+    if (minKm < 0 || maxKm <= minKm || fee < 0) continue;
+    bands.push({
+      minKm,
+      maxKm,
+      fee,
+      requiresConfirm: Boolean(band.requiresConfirm),
+    });
+  }
+  bands.sort((a, b) => a.minKm - b.minKm);
 
   return {
     origin: {
@@ -95,10 +96,8 @@ export function normalizeDeliveryRules(raw: unknown): DeliveryRules {
         typeof originRaw.label === 'string' && originRaw.label.trim()
           ? originRaw.label.trim()
           : fallback.origin.label,
-      lat:
-        Number.isFinite(Number(originRaw.lat)) ? Number(originRaw.lat) : fallback.origin.lat,
-      lon:
-        Number.isFinite(Number(originRaw.lon)) ? Number(originRaw.lon) : fallback.origin.lon,
+      lat: Number.isFinite(Number(originRaw.lat)) ? Number(originRaw.lat) : fallback.origin.lat,
+      lon: Number.isFinite(Number(originRaw.lon)) ? Number(originRaw.lon) : fallback.origin.lon,
     },
     bands: bands.length > 0 ? bands : fallback.bands,
     specialOrderMinKm: Number.isFinite(Number(obj.specialOrderMinKm))

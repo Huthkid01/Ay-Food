@@ -122,7 +122,11 @@ export default function CheckoutPage() {
   });
 
   const orderType = watch('orderType');
+  const deliveryAddressValue = watch('deliveryAddress');
+  const hasDeliveryAddress = Boolean(deliveryAddressValue?.trim());
   const needsGpsForDelivery = orderType === 'DELIVERY' && activePacks.length > 0 && !deliveryPoint;
+  const needsAddressForDelivery =
+    orderType === 'DELIVERY' && activePacks.length > 0 && !hasDeliveryAddress;
   const distanceResult =
     orderType === 'DELIVERY' && activePacks.length > 0 && deliveryPoint
       ? computeDeliveryFee(deliveryRules, deliveryPoint.lat, deliveryPoint.lon)
@@ -132,7 +136,9 @@ export default function CheckoutPage() {
       ? distanceResult.fee
       : 0;
   const manualQuoteOnly = Boolean(distanceResult?.manualQuoteOnly);
-  const canPayDelivery = orderType !== 'DELIVERY' || (Boolean(deliveryPoint) && !manualQuoteOnly);
+  const canPayDelivery =
+    orderType !== 'DELIVERY' ||
+    (hasDeliveryAddress && Boolean(deliveryPoint) && !manualQuoteOnly);
   const orderTotal = itemsTotal + deliveryFee;
   const processingFee = getKoraProcessingFeeNgn(orderTotal);
   const chargeTotal = getKoraChargeNgn(orderTotal);
@@ -237,6 +243,9 @@ export default function CheckoutPage() {
 
   const payWithKora = useMutation({
     mutationFn: async (form: CheckoutForm) => {
+      if (form.orderType === 'DELIVERY' && !form.deliveryAddress?.trim()) {
+        throw new Error('Please enter your delivery address before paying');
+      }
       if (form.orderType === 'DELIVERY' && !deliveryPoint) {
         throw new Error('Tap “Use current location” so we can calculate your delivery fee');
       }
@@ -293,8 +302,12 @@ export default function CheckoutPage() {
   });
 
   function openPaymentConfirm(form: CheckoutForm) {
+    if (form.orderType === 'DELIVERY' && !form.deliveryAddress?.trim()) {
+      showToast('Please enter your delivery address before paying', 'error');
+      return;
+    }
     if (form.orderType === 'DELIVERY' && !deliveryPoint) {
-      showToast('Tap “Use current location” to calculate your delivery fee', 'error');
+      showToast('Tap “Use current location” so we can set your delivery fee', 'error');
       return;
     }
     if (form.orderType === 'DELIVERY' && manualQuoteOnly) {
@@ -576,7 +589,12 @@ export default function CheckoutPage() {
                   : formatCurrency(deliveryFee)}
               </span>
             </div>
-            {needsGpsForDelivery && (
+            {needsAddressForDelivery && (
+              <p className="rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-xs text-brand-gold/95">
+                Enter your delivery address to continue.
+              </p>
+            )}
+            {needsGpsForDelivery && !needsAddressForDelivery && (
               <p className="rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-xs text-brand-gold/95">
                 Use current location to get your delivery fee and estimated time.
               </p>
@@ -610,21 +628,25 @@ export default function CheckoutPage() {
           </div>
           <button
             type="submit"
-            disabled={payWithKora.isPending || manualQuoteOnly}
+            disabled={payWithKora.isPending || !canPayDelivery}
             className="btn-primary btn-ripple mt-6 hidden w-full py-3.5 sm:flex disabled:opacity-60"
           >
             {manualQuoteOnly
               ? 'Special Delivery — Contact on WhatsApp'
-              : payWithKora.isPending
-                ? 'Starting Kora…'
-                : 'Pay with Kora'}
+              : needsAddressForDelivery
+                ? 'Enter delivery address'
+                : needsGpsForDelivery
+                  ? 'Use location for delivery fee'
+                  : payWithKora.isPending
+                    ? 'Starting Kora…'
+                    : 'Pay with Kora'}
           </button>
         </div>
 
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 w-[min(calc(100vw-5.5rem),20rem)] sm:hidden lg:col-span-2">
           <button
             type="submit"
-            disabled={payWithKora.isPending || manualQuoteOnly}
+            disabled={payWithKora.isPending || !canPayDelivery}
             className="glass-panel flex w-full items-center justify-between gap-3 rounded-2xl p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)] disabled:opacity-60"
             aria-label="Pay with Kora"
           >
@@ -632,9 +654,13 @@ export default function CheckoutPage() {
               <span className="block text-sm font-semibold text-white">
                 {manualQuoteOnly
                   ? 'Special Delivery'
-                  : payWithKora.isPending
-                    ? 'Starting Kora…'
-                    : 'Pay with Kora'}
+                  : needsAddressForDelivery
+                    ? 'Enter address'
+                    : needsGpsForDelivery
+                      ? 'Set location'
+                      : payWithKora.isPending
+                        ? 'Starting Kora…'
+                        : 'Pay with Kora'}
               </span>
               <span className="block text-xs text-secondary">{formatCurrency(chargeTotal)}</span>
             </span>

@@ -5,9 +5,11 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 const supabaseFunctionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL as string | undefined;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    'Supabase env missing. Copy frontend/.env.example → frontend/.env.local and set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY.'
-  );
+  if (import.meta.env.DEV) {
+    console.warn(
+      'Supabase env missing. Copy frontend/.env.example → frontend/.env.local and set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY.'
+    );
+  }
 }
 
 export const supabase = createClient(

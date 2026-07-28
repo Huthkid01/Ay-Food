@@ -83,10 +83,14 @@ export const siteVisitService = {
         p_ip_address: location.ip,
       });
       if (error) {
-        console.warn('[site-visit]', error.message);
+        if (import.meta.env.DEV) {
+          console.warn('[site-visit]', error.message);
+        }
       }
     } catch (err) {
-      console.warn('[site-visit]', err);
+      if (import.meta.env.DEV) {
+        console.warn('[site-visit]', err);
+      }
     }
   },
 
