@@ -116,6 +116,68 @@ async function reverseGeocodeMeta(lat: number, lon: number): Promise<ReverseGeoM
 }
 
 /**
+ * Forward-geocode a typed address → lat/lon for delivery fee (no API key).
+ * Biased toward Nigeria / the kitchen area. Returns null if nothing useful is found.
+ */
+export async function geocodeDeliveryAddress(
+  query: string,
+  near?: { lat: number; lon: number },
+): Promise<ResolvedDeliveryAddress | null> {
+  const q = query.trim();
+  if (q.length < 8) return null;
+
+  const searchQuery = /nigeria/i.test(q) ? q : `${q}, Nigeria`;
+
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', searchQuery);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('limit', '1');
+    url.searchParams.set('countrycodes', 'ng');
+    url.searchParams.set('addressdetails', '1');
+    if (near) {
+      const pad = 0.55;
+      // Nominatim viewbox: left, top, right, bottom
+      url.searchParams.set(
+        'viewbox',
+        `${near.lon - pad},${near.lat + pad},${near.lon + pad},${near.lat - pad}`,
+      );
+      url.searchParams.set('bounded', '0');
+    }
+
+    const res = await fetch(url.toString(), {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+
+    const results = (await res.json()) as Array<{
+      lat?: string;
+      lon?: string;
+      display_name?: string;
+      address?: Record<string, string | undefined>;
+    }>;
+    const hit = results[0];
+    const lat = Number(hit?.lat);
+    const lon = Number(hit?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+    const addr = hit.address ?? {};
+    return {
+      address: hit.display_name?.trim() || q,
+      lat,
+      lon,
+      mapsUrl: `https://www.google.com/maps?q=${lat},${lon}`,
+      city: addr.city || addr.town || addr.village || addr.county || null,
+      state: addr.state || addr.state_district || null,
+      landmark: addr.road || addr.neighbourhood || addr.suburb || addr.amenity || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Ask for GPS permission (browser dialog when state is “prompt”),
  * reverse-geocode, and return a delivery address + Maps link.
  */

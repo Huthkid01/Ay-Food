@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,6 +17,7 @@ import {
   siteSettingsService,
 } from '../services/site-settings.service';
 import {
+  geocodeDeliveryAddress,
   geolocationErrorMessage,
   getGeolocationPermission,
   locationBlockedHelp,
@@ -96,6 +97,8 @@ export default function CheckoutPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingForm, setPendingForm] = useState<CheckoutForm | null>(null);
   const [locating, setLocating] = useState(false);
+  const [geocodingAddress, setGeocodingAddress] = useState(false);
+  const [addressLookupFailed, setAddressLookupFailed] = useState(false);
   const [mapsUrl, setMapsUrl] = useState<string | null>(null);
   const [locationBlocked, setLocationBlocked] = useState(false);
   const [deliveryPoint, setDeliveryPoint] = useState<{
@@ -105,6 +108,9 @@ export default function CheckoutPage() {
     state?: string | null;
     landmark?: string | null;
   } | null>(null);
+  const skipAddressGeocodeRef = useRef(false);
+  const lastGeocodedAddressRef = useRef('');
+  const lastFailedAddressRef = useRef('');
 
   const itemsTotal = subtotal + packFees;
 
@@ -124,7 +130,8 @@ export default function CheckoutPage() {
   const orderType = watch('orderType');
   const deliveryAddressValue = watch('deliveryAddress');
   const hasDeliveryAddress = Boolean(deliveryAddressValue?.trim());
-  const needsGpsForDelivery = orderType === 'DELIVERY' && activePacks.length > 0 && !deliveryPoint;
+  const needsLocationForFee =
+    orderType === 'DELIVERY' && activePacks.length > 0 && !deliveryPoint && !geocodingAddress;
   const needsAddressForDelivery =
     orderType === 'DELIVERY' && activePacks.length > 0 && !hasDeliveryAddress;
   const distanceResult =
@@ -138,7 +145,7 @@ export default function CheckoutPage() {
   const manualQuoteOnly = Boolean(distanceResult?.manualQuoteOnly);
   const canPayDelivery =
     orderType !== 'DELIVERY' ||
-    (hasDeliveryAddress && Boolean(deliveryPoint) && !manualQuoteOnly);
+    (hasDeliveryAddress && Boolean(deliveryPoint) && !manualQuoteOnly && !geocodingAddress);
   const orderTotal = itemsTotal + deliveryFee;
   const processingFee = getKoraProcessingFeeNgn(orderTotal);
   const chargeTotal = getKoraChargeNgn(orderTotal);
@@ -214,9 +221,97 @@ export default function CheckoutPage() {
     };
   }, [searchParams, completed, clearCart, setSearchParams, showToast]);
 
+  useEffect(() => {
+    if (orderType !== 'DELIVERY') {
+      setGeocodingAddress(false);
+      setAddressLookupFailed(false);
+      return;
+    }
+
+    const address = deliveryAddressValue?.trim() ?? '';
+    if (!address) {
+      setDeliveryPoint(null);
+      setMapsUrl(null);
+      setGeocodingAddress(false);
+      setAddressLookupFailed(false);
+      lastGeocodedAddressRef.current = '';
+      lastFailedAddressRef.current = '';
+      return;
+    }
+
+    if (skipAddressGeocodeRef.current) {
+      skipAddressGeocodeRef.current = false;
+      lastGeocodedAddressRef.current = address;
+      lastFailedAddressRef.current = '';
+      setAddressLookupFailed(false);
+      setGeocodingAddress(false);
+      return;
+    }
+
+    if (address === lastGeocodedAddressRef.current) {
+      return;
+    }
+
+    if (address === lastFailedAddressRef.current) {
+      setAddressLookupFailed(true);
+      setGeocodingAddress(false);
+      return;
+    }
+
+    if (address.length < 8) {
+      setDeliveryPoint(null);
+      setMapsUrl(null);
+      setGeocodingAddress(false);
+      setAddressLookupFailed(false);
+      lastGeocodedAddressRef.current = '';
+      return;
+    }
+
+    let cancelled = false;
+    setGeocodingAddress(true);
+    setAddressLookupFailed(false);
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const result = await geocodeDeliveryAddress(address, {
+          lat: deliveryRules.origin.lat,
+          lon: deliveryRules.origin.lon,
+        });
+        if (cancelled) return;
+
+        if (result) {
+          lastGeocodedAddressRef.current = address;
+          lastFailedAddressRef.current = '';
+          setDeliveryPoint({
+            lat: result.lat,
+            lon: result.lon,
+            city: result.city,
+            state: result.state,
+            landmark: result.landmark,
+          });
+          setMapsUrl(result.mapsUrl);
+          setAddressLookupFailed(false);
+        } else {
+          lastFailedAddressRef.current = address;
+          lastGeocodedAddressRef.current = '';
+          setDeliveryPoint(null);
+          setMapsUrl(null);
+          setAddressLookupFailed(true);
+        }
+        setGeocodingAddress(false);
+      })();
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [orderType, deliveryAddressValue, deliveryRules.origin.lat, deliveryRules.origin.lon]);
+
   async function handleUseCurrentLocation() {
     setLocating(true);
     setLocationBlocked(false);
+    setAddressLookupFailed(false);
     try {
       const permission = await getGeolocationPermission();
       if (permission === 'denied') {
@@ -227,6 +322,9 @@ export default function CheckoutPage() {
 
       const { address, mapsUrl: pinUrl, lat, lon, city, state, landmark } =
         await resolveDeliveryAddressFromGps();
+      skipAddressGeocodeRef.current = true;
+      lastGeocodedAddressRef.current = address.trim();
+      lastFailedAddressRef.current = '';
       setValue('deliveryAddress', address, { shouldValidate: true });
       setMapsUrl(pinUrl);
       setDeliveryPoint({ lat, lon, city, state, landmark });
@@ -247,7 +345,11 @@ export default function CheckoutPage() {
         throw new Error('Please enter your delivery address before paying');
       }
       if (form.orderType === 'DELIVERY' && !deliveryPoint) {
-        throw new Error('Tap “Use current location” so we can calculate your delivery fee');
+        throw new Error(
+          addressLookupFailed
+            ? 'We couldn’t find that address. Tap “Use current location”, or enter a clearer street / landmark.'
+            : 'Enter your address or tap “Use current location” so we can calculate the delivery fee',
+        );
       }
       if (form.orderType === 'DELIVERY' && manualQuoteOnly) {
         throw new Error('This area needs a special delivery quote — contact us on WhatsApp first');
@@ -307,7 +409,12 @@ export default function CheckoutPage() {
       return;
     }
     if (form.orderType === 'DELIVERY' && !deliveryPoint) {
-      showToast('Tap “Use current location” so we can set your delivery fee', 'error');
+      showToast(
+        addressLookupFailed
+          ? 'We couldn’t find that address. Tap “Use current location”, or enter a clearer street / landmark.'
+          : 'Enter your address or tap “Use current location” for the delivery fee',
+        'error',
+      );
       return;
     }
     if (form.orderType === 'DELIVERY' && manualQuoteOnly) {
@@ -488,7 +595,7 @@ export default function CheckoutPage() {
                   id="checkout-address"
                   {...register('deliveryAddress')}
                   rows={3}
-                  placeholder="Tap “Use current location” first, then edit street / landmark if needed"
+                  placeholder="Type your street / landmark, or use current location"
                   className="w-full rounded-2xl border border-brand-subtle bg-brand-card px-4 py-3.5 outline-none transition focus:border-brand-gold"
                 />
                 {mapsUrl && (
@@ -510,11 +617,27 @@ export default function CheckoutPage() {
                       : ''}
                   </p>
                 )}
-                {needsGpsForDelivery && (
+                {geocodingAddress && (
+                  <p className="mt-2 text-xs text-white/55">Finding your delivery fee…</p>
+                )}
+                {addressLookupFailed && !geocodingAddress && (
                   <p className="mt-2 rounded-xl border border-brand-gold/35 bg-brand-gold/10 px-3 py-2 text-xs leading-relaxed text-brand-gold/95">
-                    Tap <span className="font-semibold">Use current location</span> so we can
-                    calculate your exact delivery fee from Omoleye. You can still edit the address
-                    after it fills.
+                    We couldn’t locate that address. Try a clearer street or landmark, or tap{' '}
+                    <span className="font-semibold">Use current location</span> so we can calculate
+                    your delivery fee.
+                  </p>
+                )}
+                {needsLocationForFee && !addressLookupFailed && !geocodingAddress && hasDeliveryAddress && (
+                  <p className="mt-2 rounded-xl border border-brand-gold/35 bg-brand-gold/10 px-3 py-2 text-xs leading-relaxed text-brand-gold/95">
+                    Keep typing a full address (street / landmark / area), or tap{' '}
+                    <span className="font-semibold">Use current location</span> for your delivery fee.
+                  </p>
+                )}
+                {!hasDeliveryAddress && orderType === 'DELIVERY' && (
+                  <p className="mt-2 rounded-xl border border-brand-gold/35 bg-brand-gold/10 px-3 py-2 text-xs leading-relaxed text-brand-gold/95">
+                    Type your delivery address, or tap{' '}
+                    <span className="font-semibold">Use current location</span>. We’ll calculate the
+                    fee from either.
                   </p>
                 )}
                 {locationBlocked && (
@@ -584,9 +707,11 @@ export default function CheckoutPage() {
             <div className="flex justify-between text-secondary">
               <span>{orderType === 'DELIVERY' ? 'Delivery' : 'Delivery (pickup — free)'}</span>
               <span>
-                {orderType === 'DELIVERY' && needsGpsForDelivery
-                  ? 'Set location'
-                  : formatCurrency(deliveryFee)}
+                {orderType === 'DELIVERY' && geocodingAddress
+                  ? 'Calculating…'
+                  : orderType === 'DELIVERY' && needsLocationForFee
+                    ? 'Set address'
+                    : formatCurrency(deliveryFee)}
               </span>
             </div>
             {needsAddressForDelivery && (
@@ -594,9 +719,19 @@ export default function CheckoutPage() {
                 Enter your delivery address to continue.
               </p>
             )}
-            {needsGpsForDelivery && !needsAddressForDelivery && (
+            {geocodingAddress && (
               <p className="rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-xs text-brand-gold/95">
-                Use current location to get your delivery fee and estimated time.
+                Calculating delivery fee from your address…
+              </p>
+            )}
+            {addressLookupFailed && !geocodingAddress && (
+              <p className="rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-xs text-brand-gold/95">
+                Address not found — use current location or enter a clearer address.
+              </p>
+            )}
+            {needsLocationForFee && !needsAddressForDelivery && !addressLookupFailed && !geocodingAddress && (
+              <p className="rounded-xl border border-brand-gold/30 bg-brand-gold/10 px-3 py-2 text-xs text-brand-gold/95">
+                Finish your address or use current location for the delivery fee.
               </p>
             )}
             {distanceResult && !distanceResult.manualQuoteOnly && (
@@ -635,11 +770,13 @@ export default function CheckoutPage() {
               ? 'Special Delivery — Contact on WhatsApp'
               : needsAddressForDelivery
                 ? 'Enter delivery address'
-                : needsGpsForDelivery
-                  ? 'Use location for delivery fee'
-                  : payWithKora.isPending
-                    ? 'Starting Kora…'
-                    : 'Pay with Kora'}
+                : geocodingAddress
+                  ? 'Finding delivery fee…'
+                  : addressLookupFailed || needsLocationForFee
+                    ? 'Use location or clearer address'
+                    : payWithKora.isPending
+                      ? 'Starting Kora…'
+                      : 'Pay with Kora'}
           </button>
         </div>
 
@@ -656,11 +793,13 @@ export default function CheckoutPage() {
                   ? 'Special Delivery'
                   : needsAddressForDelivery
                     ? 'Enter address'
-                    : needsGpsForDelivery
-                      ? 'Set location'
-                      : payWithKora.isPending
-                        ? 'Starting Kora…'
-                        : 'Pay with Kora'}
+                    : geocodingAddress
+                      ? 'Finding fee…'
+                      : addressLookupFailed || needsLocationForFee
+                        ? 'Set location'
+                        : payWithKora.isPending
+                          ? 'Starting Kora…'
+                          : 'Pay with Kora'}
               </span>
               <span className="block text-xs text-secondary">{formatCurrency(chargeTotal)}</span>
             </span>
