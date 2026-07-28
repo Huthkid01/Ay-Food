@@ -118,7 +118,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     address: 'Omoleye bustop, Ogijo, Ikorodu–Shagamu Road',
     phone: '+234 817 309 7933',
     email: 'contact@ayfoodpalace.com',
-    hours: 'Mon–Sun · 9:00 AM – 10:00 PM',
+    hours: 'Mon–Thu, Sat–Sun · 8:00 AM – 10:00 PM (Closed Fridays)',
     whatsapp: 'https://wa.me/2348173097933',
     instagram: '',
     facebook: '',

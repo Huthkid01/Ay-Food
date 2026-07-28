@@ -13,7 +13,7 @@ const CONTENT_EVENT = 'ay-food-site-content-changed';
 const CONTENT_CHANNEL = 'ay-food-site-content';
 /** Bump to push official bank + WhatsApp + brand into existing local drafts once. */
 const CONTACT_SEED_KEY = 'ay-food-contact-seed';
-const CONTACT_SEED_VERSION = 'brand-ay-food-palace-v1';
+const CONTACT_SEED_VERSION = 'hours-closed-friday-8am-v1';
 
 export const SITE_CONTENT_KEY = ['site-content'] as const;
 
@@ -334,6 +334,7 @@ function applyOfficialContactSeed(content: SiteContent): SiteContent {
         brandAccent: DEFAULT_SITE_CONTENT.restaurant.brandAccent,
         phone: DEFAULT_SITE_CONTENT.restaurant.phone,
         whatsapp: DEFAULT_SITE_CONTENT.restaurant.whatsapp,
+        hours: DEFAULT_SITE_CONTENT.restaurant.hours,
         bankName: DEFAULT_SITE_CONTENT.restaurant.bankName,
         accountName: DEFAULT_SITE_CONTENT.restaurant.accountName,
         accountNumber: DEFAULT_SITE_CONTENT.restaurant.accountNumber,

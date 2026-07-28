@@ -50,12 +50,15 @@ const TRUST_BADGES = [
   { icon: Star, label: '4.9 Rating', fill: true },
   { icon: MapPin, label: 'Ogijo, Ikorodu' },
   { icon: Truck, label: '30–45 mins' },
-  { icon: Clock, label: 'Open Daily' },
+  { icon: Clock, label: '8AM–10PM' },
 ];
 
+/** Open 8:00–22:00 except Friday (closed). */
 function isOpenNow() {
-  const hour = new Date().getHours();
-  return hour >= 9 && hour < 22;
+  const now = new Date();
+  if (now.getDay() === 5) return false; // Friday
+  const hour = now.getHours();
+  return hour >= 8 && hour < 22;
 }
 
 /** Map admin-managed slides into the homepage story presentation. */
