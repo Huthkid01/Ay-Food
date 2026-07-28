@@ -4,16 +4,33 @@ import { postFormSubmitBrowser, type FormSubmitResult } from '../lib/formsubmit-
 
 function formatItems(order: WhatsAppOrderDetails): string {
   if (order.items.length === 0) return '—';
-  return order.items
-    .map((item) => {
-      const size =
-        item.portionName && item.portionName.toLowerCase() !== 'standard'
-          ? ` (${item.portionName})`
-          : '';
-      const pack = item.packName ? ` [${item.packName}]` : '';
-      return `• ${item.foodName}${size}${pack} x${item.quantity} — ${formatCurrency(item.unitPrice * item.quantity)}`;
+
+  const groups: Array<{ packName: string; items: WhatsAppOrderDetails['items'] }> = [];
+  const indexByName = new Map<string, number>();
+
+  for (const item of order.items) {
+    const packName = item.packName?.trim() || 'Other items';
+    let idx = indexByName.get(packName);
+    if (idx === undefined) {
+      idx = groups.length;
+      indexByName.set(packName, idx);
+      groups.push({ packName, items: [] });
+    }
+    groups[idx].items.push(item);
+  }
+
+  return groups
+    .map((group) => {
+      const lines = group.items.map((item) => {
+        const size =
+          item.portionName && item.portionName.toLowerCase() !== 'standard'
+            ? ` (${item.portionName})`
+            : '';
+        return `  • ${item.foodName}${size} x${item.quantity} — ${formatCurrency(item.unitPrice * item.quantity)}`;
+      });
+      return `${group.packName}:\n${lines.join('\n')}`;
     })
-    .join('\n');
+    .join('\n\n');
 }
 
 /** Owner-facing FormSubmit fields only — no tracking URL or internal metadata. */

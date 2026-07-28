@@ -38,7 +38,7 @@ export function extractWhatsAppPhone(whatsappUrl: string, fallback = '2348173097
 
 /**
  * Friendly WhatsApp order note for the kitchen.
- * Keeps name, phone, email, address, items, and total — skips empty optionals.
+ * Keeps name, phone, email, address, items by pack, and total — skips empty optionals.
  */
 export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
   const lines: string[] = [
@@ -51,7 +51,7 @@ export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
     lines.push(`Name: ${order.customerName.trim()}`);
   }
   if (order.customerPhone?.trim()) {
-    lines.push(`Phone: ${order.customerPhone.trim()}`);
+    lines.push(`WhatsApp: ${order.customerPhone.trim()}`);
   }
   if (order.customerEmail?.trim()) {
     lines.push(`Email: ${order.customerEmail.trim()}`);
@@ -71,12 +71,16 @@ export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
 
   if (order.items.length > 0) {
     lines.push('', 'My order:');
-    for (const item of order.items) {
-      const size =
-        item.portionName && item.portionName.toLowerCase() !== 'standard'
-          ? ` (${item.portionName})`
-          : '';
-      lines.push(`• ${item.foodName}${size} x${item.quantity}`);
+    const packs = groupWhatsAppItemsByPack(order.items);
+    for (const pack of packs) {
+      lines.push('', `*${pack.packName}*`);
+      for (const item of pack.items) {
+        const size =
+          item.portionName && item.portionName.toLowerCase() !== 'standard'
+            ? ` (${item.portionName})`
+            : '';
+        lines.push(`• ${item.foodName}${size} x${item.quantity}`);
+      }
     }
   }
 
@@ -91,6 +95,24 @@ export function buildOrderWhatsAppMessage(order: WhatsAppOrderDetails): string {
   }
 
   return lines.join('\n');
+}
+
+function groupWhatsAppItemsByPack(items: WhatsAppOrderItem[]) {
+  const groups: Array<{ packName: string; items: WhatsAppOrderItem[] }> = [];
+  const indexByName = new Map<string, number>();
+
+  for (const item of items) {
+    const packName = item.packName?.trim() || 'Other items';
+    let idx = indexByName.get(packName);
+    if (idx === undefined) {
+      idx = groups.length;
+      indexByName.set(packName, idx);
+      groups.push({ packName, items: [] });
+    }
+    groups[idx].items.push(item);
+  }
+
+  return groups;
 }
 
 export function buildOrderWhatsAppUrl(

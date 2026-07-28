@@ -44,44 +44,84 @@ function formatNgn(amount: number) {
   return `NGN ${Math.round(amount).toLocaleString('en-NG')}`;
 }
 
-function formatItems(items: OrderEmailItem[]) {
-  if (!items.length) return '-';
-  return items
-    .map((item) => {
-      const name = item.food_name || 'Item';
-      const size =
-        item.portion_name && item.portion_name.toLowerCase() !== 'standard'
-          ? ` (${item.portion_name})`
-          : '';
-      const pack = item.pack_name ? ` [${item.pack_name}]` : '';
-      const qty = item.quantity ?? 1;
-      const lineTotal = item.total_price ?? (item.unit_price ?? 0) * qty;
-      return `- ${name}${size}${pack} x${qty}: ${formatNgn(lineTotal)}`;
-    })
-    .join('\n');
+function groupItemsByPack(items: OrderEmailItem[]) {
+  const groups: Array<{ packName: string; items: OrderEmailItem[] }> = [];
+  const indexByName = new Map<string, number>();
+
+  for (const item of items) {
+    const packName = (item.pack_name || '').trim() || 'Other items';
+    let idx = indexByName.get(packName);
+    if (idx === undefined) {
+      idx = groups.length;
+      indexByName.set(packName, idx);
+      groups.push({ packName, items: [] });
+    }
+    groups[idx].items.push(item);
+  }
+
+  return groups;
 }
 
+function formatItemLine(item: OrderEmailItem) {
+  const name = item.food_name || 'Item';
+  const size =
+    item.portion_name && item.portion_name.toLowerCase() !== 'standard'
+      ? ` (${item.portion_name})`
+      : '';
+  const qty = item.quantity ?? 1;
+  const lineTotal = item.total_price ?? (item.unit_price ?? 0) * qty;
+  return { name, size, qty, lineTotal };
+}
+
+function formatItems(items: OrderEmailItem[]) {
+  if (!items.length) return '-';
+  const groups = groupItemsByPack(items);
+  const blocks: string[] = [];
+  for (const group of groups) {
+    blocks.push(`${group.packName}:`);
+    for (const item of group.items) {
+      const { name, size, qty, lineTotal } = formatItemLine(item);
+      blocks.push(`  - ${name}${size} x${qty}: ${formatNgn(lineTotal)}`);
+    }
+  }
+  return blocks.join('\n');
+}
+
+/** Inbox-safe pack summary: stacked sections + simple tables (no CSS grid / cards). */
 function formatItemsHtml(items: OrderEmailItem[]) {
   if (!items.length) {
-    return '<tr><td colspan="3" style="padding:10px 0;color:#555;">No items</td></tr>';
+    return '<p style="margin:0;padding:8px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#555555;">No items</p>';
   }
-  return items
+
+  const groups = groupItemsByPack(items);
+  return groups.map((group) => renderPackSectionHtml(group)).join('');
+}
+
+function renderPackSectionHtml(group: { packName: string; items: OrderEmailItem[] }) {
+  const rows = group.items
     .map((item) => {
-      const name = escapeHtml(item.food_name || 'Item');
-      const size =
-        item.portion_name && item.portion_name.toLowerCase() !== 'standard'
-          ? ` (${escapeHtml(item.portion_name)})`
-          : '';
-      const pack = item.pack_name ? ` [${escapeHtml(item.pack_name)}]` : '';
-      const qty = item.quantity ?? 1;
-      const lineTotal = item.total_price ?? (item.unit_price ?? 0) * qty;
+      const { name, size, qty, lineTotal } = formatItemLine(item);
       return `<tr>
-        <td style="padding:10px 0;border-bottom:1px solid #eeeeee;font-size:14px;color:#222222;">${name}${size}${pack}</td>
-        <td align="center" style="padding:10px 0;border-bottom:1px solid #eeeeee;font-size:14px;color:#222222;">${qty}</td>
-        <td align="right" style="padding:10px 0;border-bottom:1px solid #eeeeee;font-size:14px;color:#222222;">${formatNgn(lineTotal)}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #eeeeee;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;color:#222222;">${escapeHtml(name)}${escapeHtml(size)}</td>
+        <td align="center" width="48" style="padding:8px 0;border-bottom:1px solid #eeeeee;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;color:#222222;">${qty}</td>
+        <td align="right" width="96" style="padding:8px 0;border-bottom:1px solid #eeeeee;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;color:#222222;">${formatNgn(lineTotal)}</td>
       </tr>`;
     })
     .join('');
+
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:0 0 16px 0;">
+    <tr>
+      <td colspan="3" style="padding:0 0 6px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.4;font-weight:bold;color:#111111;">
+        ${escapeHtml(group.packName)}
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:0 0 6px 0;border-bottom:1px solid #dddddd;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#666666;">Item</td>
+      <td align="center" width="48" style="padding:0 0 6px 0;border-bottom:1px solid #dddddd;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#666666;">Qty</td>
+      <td align="right" width="96" style="padding:0 0 6px 0;border-bottom:1px solid #dddddd;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#666666;">Amount</td>
+    </tr>
+    ${rows}
+  </table>`;
 }
 
 function getAppUrl() {
@@ -190,13 +230,22 @@ function buildCustomerEmail(order: OrderEmailPayload) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${safeOrder}</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>Order ${safeOrder}</title>
+  <!--[if mso]>
+  <style type="text/css">
+    table, td { font-family: Arial, Helvetica, sans-serif !important; }
+  </style>
+  <![endif]-->
 </head>
-<body style="margin:0;padding:0;background-color:#f6f6f6;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f6f6f6;">
+<body style="margin:0;padding:0;background-color:#f4f4f4;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background-color:#f4f4f4;">
     <tr>
-      <td align="center" style="padding:24px 12px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background-color:#ffffff;border:1px solid #e8e8e8;">
+      <td align="center" style="padding:20px 12px;">
+        <!--[if mso]>
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"><tr><td>
+        <![endif]-->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;max-width:560px;width:100%;background-color:#ffffff;">
           <tr>
             <td style="padding:24px 24px 8px 24px;font-family:Arial,Helvetica,sans-serif;font-size:20px;line-height:1.4;color:#111111;font-weight:bold;">
               Order confirmed
@@ -216,24 +265,17 @@ function buildCustomerEmail(order: OrderEmailPayload) {
             </td>
           </tr>
           <tr>
-            <td style="padding:8px 24px 4px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.4;color:#111111;font-weight:bold;">
+            <td style="padding:8px 24px 8px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.4;color:#111111;font-weight:bold;">
               Order summary
             </td>
           </tr>
           <tr>
             <td style="padding:0 24px 8px 24px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
-                <tr>
-                  <td style="padding:8px 0;border-bottom:2px solid #dddddd;font-size:12px;color:#666666;">Item</td>
-                  <td align="center" style="padding:8px 0;border-bottom:2px solid #dddddd;font-size:12px;color:#666666;">Qty</td>
-                  <td align="right" style="padding:8px 0;border-bottom:2px solid #dddddd;font-size:12px;color:#666666;">Amount</td>
-                </tr>
-                ${itemsHtml}
-              </table>
+              ${itemsHtml}
             </td>
           </tr>
           <tr>
-            <td style="padding:12px 24px 24px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111111;">
+            <td style="padding:8px 24px 24px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111111;">
               <strong>Total:</strong> ${formatNgn(order.total)}
             </td>
           </tr>
@@ -243,10 +285,13 @@ function buildCustomerEmail(order: OrderEmailPayload) {
               <a href="${appUrl}" style="color:#c2410c;text-decoration:underline;">ayfoodpalace.com</a>.<br><br>
               Ay Food Palace<br>
               Omoleye, Ogijo, Ogun State, Nigeria<br>
-              contact@ayfoodpalace.com
+              <a href="mailto:contact@ayfoodpalace.com" style="color:#666666;text-decoration:underline;">contact@ayfoodpalace.com</a>
             </td>
           </tr>
         </table>
+        <!--[if mso]>
+        </td></tr></table>
+        <![endif]-->
       </td>
     </tr>
   </table>
@@ -279,15 +324,13 @@ async function sendCustomerThankYou(order: OrderEmailPayload): Promise<boolean> 
       html: content.html,
       messageId,
       priority: 'normal',
-      // Helps filters treat this as a receipt, not marketing.
+      // Transactional receipt headers — avoid marketing / spammy signals.
       headers: {
         'Auto-Submitted': 'auto-generated',
         'X-Auto-Response-Suppress': 'All',
         'X-Entity-Ref-ID': order.order_number,
-        'List-Unsubscribe': `<mailto:${from.email}?subject=unsubscribe>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        Precedence: 'auto_reply',
       },
-      // Prefer quoted-printable for cleaner MIME / spam scores.
       textEncoding: 'quoted-printable',
     });
     return true;

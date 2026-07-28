@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Clock, Package, Truck, Home } from 'lucide-react';
 import { getOrderByNumber } from '../services/orders.service';
+import type { AdminOrderItem } from '../services/admin-store';
 import { formatCurrency } from '../utils/helpers';
 
 const STATUS_STEPS = [
@@ -12,6 +13,25 @@ const STATUS_STEPS = [
   { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', icon: Truck },
   { key: 'DELIVERED', label: 'Delivered', icon: Home },
 ];
+
+function groupItemsByPack(items: AdminOrderItem[]) {
+  const groups: Array<{ packName: string; items: AdminOrderItem[]; subtotal: number }> = [];
+  const indexByName = new Map<string, number>();
+
+  for (const item of items) {
+    const packName = item.packName?.trim() || 'Other items';
+    let idx = indexByName.get(packName);
+    if (idx === undefined) {
+      idx = groups.length;
+      indexByName.set(packName, idx);
+      groups.push({ packName, items: [], subtotal: 0 });
+    }
+    groups[idx].items.push(item);
+    groups[idx].subtotal += Number(item.totalPrice) || 0;
+  }
+
+  return groups;
+}
 
 export default function TrackOrderPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,6 +55,10 @@ export default function TrackOrderPage() {
 
   const currentIndex = STATUS_STEPS.findIndex((s) => s.key === order?.status);
   const showResults = hasSearch;
+  const packGroups = useMemo(
+    () => (order?.items ? groupItemsByPack(order.items) : []),
+    [order?.items],
+  );
 
   function clearTracking() {
     setOrderNumber('');
@@ -170,17 +194,49 @@ export default function TrackOrderPage() {
 
           <div className="rounded-xl border border-white/10 bg-brand-dark-light p-4">
             <h3 className="mb-3 font-semibold">Order Items</h3>
-            {order.items.map((item) => (
-              <div
-                key={item.id}
-                className="flex justify-between border-b border-white/5 py-2 text-sm last:border-0"
-              >
-                <span>
-                  {item.food.name} ({item.portionName}) ×{item.quantity}
-                </span>
-                <span className="text-brand-gold">{formatCurrency(item.totalPrice)}</span>
+            {packGroups.length === 0 ? (
+              <p className="text-sm text-white/50">No items on this order.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {packGroups.map((pack) => (
+                  <article
+                    key={pack.packName}
+                    className="flex min-w-0 flex-col rounded-xl border border-white/10 bg-brand-dark/70 p-3"
+                  >
+                    <header className="mb-2 border-b border-white/10 pb-2">
+                      <p className="truncate text-sm font-semibold text-brand-gold">{pack.packName}</p>
+                      <p className="text-[11px] text-white/45">
+                        {pack.items.length} item{pack.items.length === 1 ? '' : 's'}
+                      </p>
+                    </header>
+                    <ul className="flex flex-1 flex-col gap-2 text-xs sm:text-sm">
+                      {pack.items.map((item) => (
+                        <li key={item.id} className="min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="min-w-0 leading-snug text-white/85">
+                              {item.food.name}
+                              <span className="text-white/45">
+                                {' '}
+                                ({item.portionName}) ×{item.quantity}
+                              </span>
+                            </span>
+                            <span className="shrink-0 font-medium text-brand-gold">
+                              {formatCurrency(item.totalPrice)}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <footer className="mt-3 border-t border-white/10 pt-2 text-xs">
+                      <div className="flex justify-between gap-2 font-medium">
+                        <span className="text-white/50">Pack total</span>
+                        <span className="text-brand-gold">{formatCurrency(pack.subtotal)}</span>
+                      </div>
+                    </footer>
+                  </article>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}
