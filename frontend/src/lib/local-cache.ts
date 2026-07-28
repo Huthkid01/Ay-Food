@@ -31,6 +31,7 @@ export function clearBusinessLocalData() {
 /** Keys that are allowed for UX / cache (documentation + audits). */
 export const ALLOWED_LOCAL_KEYS = [
   'ay-food-cart-v2',
+  'ay-food-checkout-draft',
   'ay-food-site-content',
   'ay-food-menu-catalog-cache',
   'ay-food-site-settings',

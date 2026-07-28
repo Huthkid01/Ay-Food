@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,6 +37,11 @@ import {
   DEFAULT_DELIVERY_RULES,
   normalizeDeliveryRules,
 } from '../utils/delivery-fee';
+import {
+  clearCheckoutDraft,
+  readCheckoutDraft,
+  saveCheckoutDraft,
+} from '../utils/checkout-draft';
 
 const checkoutSchema = z
   .object({
@@ -86,6 +91,7 @@ export default function CheckoutPage() {
   const { restaurant } = useSiteContentData();
   const { showToast } = useToast();
   const items = getFlattenedItems();
+  const savedDraft = useMemo(() => readCheckoutDraft(), []);
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => siteSettingsService.get(),
@@ -99,7 +105,7 @@ export default function CheckoutPage() {
   const [locating, setLocating] = useState(false);
   const [geocodingAddress, setGeocodingAddress] = useState(false);
   const [addressLookupFailed, setAddressLookupFailed] = useState(false);
-  const [mapsUrl, setMapsUrl] = useState<string | null>(null);
+  const [mapsUrl, setMapsUrl] = useState<string | null>(savedDraft?.mapsUrl ?? null);
   const [locationBlocked, setLocationBlocked] = useState(false);
   const [deliveryPoint, setDeliveryPoint] = useState<{
     lat: number;
@@ -107,9 +113,13 @@ export default function CheckoutPage() {
     city?: string | null;
     state?: string | null;
     landmark?: string | null;
-  } | null>(null);
-  const skipAddressGeocodeRef = useRef(false);
-  const lastGeocodedAddressRef = useRef('');
+  } | null>(savedDraft?.deliveryPoint ?? null);
+  const skipAddressGeocodeRef = useRef(Boolean(savedDraft?.deliveryPoint));
+  const lastGeocodedAddressRef = useRef(
+    savedDraft?.deliveryPoint && savedDraft.form.deliveryAddress?.trim()
+      ? savedDraft.form.deliveryAddress.trim()
+      : '',
+  );
   const lastFailedAddressRef = useRef('');
 
   const itemsTotal = subtotal + packFees;
@@ -123,12 +133,45 @@ export default function CheckoutPage() {
   } = useForm<CheckoutForm>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
-      orderType: 'DELIVERY',
+      orderType: savedDraft?.form.orderType ?? 'DELIVERY',
+      customerName: savedDraft?.form.customerName ?? '',
+      customerPhone: savedDraft?.form.customerPhone ?? '',
+      customerEmail: savedDraft?.form.customerEmail ?? '',
+      deliveryAddress: savedDraft?.form.deliveryAddress ?? '',
+      deliveryInstructions: savedDraft?.form.deliveryInstructions ?? '',
     },
   });
 
   const orderType = watch('orderType');
   const deliveryAddressValue = watch('deliveryAddress');
+  const customerName = watch('customerName');
+  const customerPhone = watch('customerPhone');
+  const customerEmail = watch('customerEmail');
+  const deliveryInstructions = watch('deliveryInstructions');
+
+  useEffect(() => {
+    saveCheckoutDraft({
+      form: {
+        customerName,
+        customerPhone,
+        customerEmail,
+        orderType,
+        deliveryAddress: deliveryAddressValue,
+        deliveryInstructions,
+      },
+      deliveryPoint,
+      mapsUrl,
+    });
+  }, [
+    customerName,
+    customerPhone,
+    customerEmail,
+    orderType,
+    deliveryAddressValue,
+    deliveryInstructions,
+    deliveryPoint,
+    mapsUrl,
+  ]);
   const hasDeliveryAddress = Boolean(deliveryAddressValue?.trim());
   const needsLocationForFee =
     orderType === 'DELIVERY' && activePacks.length > 0 && !deliveryPoint && !geocodingAddress;
@@ -210,6 +253,7 @@ export default function CheckoutPage() {
         void notifyAdminKoraPaid(whatsapp).catch(() => undefined);
 
         clearCart();
+        clearCheckoutDraft();
         clearPendingKoraCheckout();
         setCompleted({
           orderNumber: result.orderNumber,
