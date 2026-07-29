@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Clock, Package, Truck, Home } from 'lucide-react';
 import { getOrderByNumber } from '../services/orders.service';
 import type { AdminOrderItem } from '../services/admin-store';
 import { formatCurrency } from '../utils/helpers';
 import { comparePackNames, normalizePackName } from '../utils/pack-groups';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const STATUS_STEPS = [
   { key: 'RECEIVED', label: 'Order Received', icon: Check },
@@ -40,20 +41,61 @@ export default function TrackOrderPage() {
   const initial = (searchParams.get('order') ?? '').trim().toUpperCase();
   const [orderNumber, setOrderNumber] = useState(initial);
   const [search, setSearch] = useState(initial);
+  const queryClient = useQueryClient();
 
   const hasSearch = search.trim().length > 0;
+  const queryKey = ['track-order', search.trim()];
 
   const { data: order, isLoading, error, isFetching } = useQuery({
-    queryKey: ['track-order', search.trim()],
+    queryKey,
     queryFn: async () => {
       const found = await getOrderByNumber(search.trim());
       if (!found) throw new Error('Order not found');
       return found;
     },
     enabled: hasSearch,
+    // Fallback polling every 10s in case realtime misses an update
     refetchInterval: hasSearch ? 10_000 : false,
     retry: false,
   });
+
+  // Supabase Realtime — instantly reflect admin status/payment changes
+  useEffect(() => {
+    if (!hasSearch || !order?.id || !isSupabaseConfigured()) return;
+
+    const channel = supabase
+      .channel(`track-order-${order.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${order.id}`,
+        },
+        () => {
+          // Invalidate so React Query refetches fresh data immediately
+          void queryClient.invalidateQueries({ queryKey });
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'payments',
+          filter: `order_id=eq.${order.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [order?.id, hasSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentIndex = (() => {
     if (!order) return -1;
