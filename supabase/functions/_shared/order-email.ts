@@ -541,6 +541,108 @@ export async function sendOrderPaidEmails(order: OrderEmailPayload): Promise<boo
   return await sendCustomerThankYou(order);
 }
 
+/** Notify customer that their order is out for delivery. */
+export async function sendOutForDeliveryEmail(order: OrderEmailPayload): Promise<boolean> {
+  const customerEmail = order.customer_email?.trim();
+  if (!customerEmail) return false;
+
+  const appUrl = getAppUrl();
+  const trackUrl = `${appUrl}/track?order=${encodeURIComponent(order.order_number)}`;
+  const safeName = escapeHtml(order.customer_name || 'Customer');
+  const safeOrder = escapeHtml(order.order_number);
+
+  const subject = `Your order is on its way — ${safeOrder}`;
+  const text = [
+    `Hi ${order.customer_name},`,
+    '',
+    `Great news! Your order ${safeOrder} from Ay Food Palace is out for delivery and on its way to you.`,
+    '',
+    `Track your order: ${trackUrl}`,
+    '',
+    'Need help? Reply to this email or visit ayfoodpalace.com.',
+    '',
+    'Ay Food Palace',
+  ].join('\n');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>Order ${safeOrder} — Out for Delivery</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background-color:#f4f4f4;">
+    <tr>
+      <td align="center" style="padding:20px 12px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;max-width:560px;width:100%;background-color:#ffffff;">
+          <tr>
+            <td style="padding:24px 24px 8px 24px;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;color:#111111;">
+              Your order is on its way!
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 16px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#333333;">
+              Hi ${safeName}, great news! Your order <strong>${safeOrder}</strong> from Ay Food Palace is out for delivery and heading your way right now.
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 24px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background-color:#fff7ed;border-radius:8px;">
+                <tr>
+                  <td style="padding:16px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333333;">
+                    <strong>Order number:</strong> ${safeOrder}<br>
+                    <strong>Status:</strong> <span style="color:#c2410c;font-weight:bold;">Out for Delivery</span><br><br>
+                    <a href="${trackUrl}" style="display:inline-block;background-color:#c2410c;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:6px;font-weight:bold;font-size:14px;">Track your order</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 24px 24px 24px;border-top:1px solid #eeeeee;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#666666;">
+              Need help? Reply to this email or visit
+              <a href="${appUrl}" style="color:#c2410c;">ayfoodpalace.com</a>.<br><br>
+              Ay Food Palace &middot; Omoleye, Ogijo, Ogun State, Nigeria
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const from = getFromAddress();
+  const messageId = createMessageId(`${order.order_number}-ofd`, from.email);
+
+  try {
+    const transporter = createSmtpTransport();
+    await transporter.sendMail({
+      from: from.header,
+      to: customerEmail,
+      replyTo: from.email,
+      subject,
+      text,
+      html,
+      messageId,
+      priority: 'normal',
+      headers: {
+        'Auto-Submitted': 'auto-generated',
+        'X-Auto-Response-Suppress': 'All',
+        'X-Entity-Ref-ID': order.order_number,
+        Precedence: 'auto_reply',
+      },
+      textEncoding: 'quoted-printable',
+    });
+    return true;
+  } catch (err) {
+    console.error('Out-for-delivery email failed', err);
+    return false;
+  }
+}
+
 export function orderEmailFromCompleteResult(result: {
   order: Record<string, unknown>;
   items: OrderEmailItem[];

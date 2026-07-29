@@ -5,6 +5,7 @@ import {
   clearOrdersInDatabase,
   confirmPaymentReceivedInDatabase,
   listOrdersFromDatabase,
+  notifyOrderStatusInDatabase,
   updateOrderStatusInDatabase,
 } from '../../services/orders.service';
 import type { AdminOrder, AdminOrderStatus } from '../../services/admin-store';
@@ -102,11 +103,16 @@ export default function AdminOrdersPage() {
   const updateStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: AdminOrderStatus }) =>
       updateOrderStatusInDatabase(id, status),
-    onSuccess: () => {
+    onSuccess: (_updatedOrder, { id, status }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['admin-customers'] });
-      showToast('Order status updated successfully', 'success');
+      if (status === 'OUT_FOR_DELIVERY') {
+        showToast('Order marked out for delivery — notifying customer by email', 'success');
+        void notifyOrderStatusInDatabase(id, status);
+      } else {
+        showToast('Order status updated successfully', 'success');
+      }
     },
     onError: (err) =>
       showToast(err instanceof Error ? err.message : 'Could not update order', 'error'),

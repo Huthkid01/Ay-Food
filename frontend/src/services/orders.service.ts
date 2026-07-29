@@ -292,6 +292,21 @@ export async function listCustomersFromDatabase() {
   return [...map.values()].sort((a, b) => b.totalSpent - a.totalSpent);
 }
 
+/** Notify customer of a status change (e.g. OUT_FOR_DELIVERY). Fires and forgets. */
+export async function notifyOrderStatusInDatabase(
+  orderId: string,
+  status: AdminOrderStatus,
+): Promise<void> {
+  assertSupabase();
+  const { getAdminToken } = await import('../lib/admin-token');
+  const adminToken = getAdminToken();
+  if (!adminToken) return;
+
+  await supabase.functions
+    .invoke('notify-status', { body: { orderId, status, adminToken } })
+    .catch(() => undefined);
+}
+
 /** Wipe all orders (and cascaded items) for a fresh owner handoff. */
 export async function clearOrdersInDatabase(): Promise<{ deletedOrders: number }> {
   assertSupabase();
