@@ -269,6 +269,10 @@ export default function AdminOrdersPage() {
                       packMap.get(pack)!.push(item);
                     }
                     const packs = [...packMap.keys()].sort(comparePackNames);
+                    const packCount = packs.filter((p) => /^pack\s*\d+$/i.test(p)).length;
+                    const PACK_FEE = 300;
+                    const packFeeTotal = packCount * PACK_FEE;
+                    const foodSubtotal = items.reduce((s, i) => s + (i.totalPrice ?? 0), 0);
                     return (
                       <div className="mb-4 space-y-3 text-sm">
                         {packs.map((packName) => (
@@ -288,6 +292,36 @@ export default function AdminOrdersPage() {
                             </ul>
                           </div>
                         ))}
+
+                        {/* Fee breakdown */}
+                        <div className="rounded-xl border border-white/10 bg-brand-dark divide-y divide-white/5 text-sm">
+                          <div className="flex justify-between px-3 py-2 text-white/60">
+                            <span>Food subtotal</span>
+                            <span>{formatCurrency(foodSubtotal)}</span>
+                          </div>
+                          {packFeeTotal > 0 && (
+                            <div className="flex justify-between px-3 py-2 text-white/60">
+                              <span>Pack fee ({packCount} × ₦{PACK_FEE})</span>
+                              <span>{formatCurrency(packFeeTotal)}</span>
+                            </div>
+                          )}
+                          {order.orderType === 'DELIVERY' && (
+                            <div className="flex justify-between px-3 py-2 text-white/60">
+                              <span>Delivery fee</span>
+                              <span>{formatCurrency(order.deliveryFee ?? 0)}</span>
+                            </div>
+                          )}
+                          {(order.discount ?? 0) > 0 && (
+                            <div className="flex justify-between px-3 py-2 text-brand-green/80">
+                              <span>Discount</span>
+                              <span>−{formatCurrency(order.discount)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between px-3 py-2.5 font-semibold text-white">
+                            <span>Total</span>
+                            <span className="text-brand-gold">{formatCurrency(order.total)}</span>
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}
