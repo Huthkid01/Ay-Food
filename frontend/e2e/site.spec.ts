@@ -113,11 +113,15 @@ test.describe('Ay Food storefront', () => {
     await expect(page.getByText(/Payment: OPay/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Pay with OPay/i }).first()).toBeVisible();
 
+    // Open payment modal
     await page.getByRole('button', { name: /Pay with OPay/i }).first().click();
     await expect(page.getByRole('heading', { name: 'Make payment' })).toBeVisible();
     await expect(page.getByText(/Amount to pay/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /I have made payment/i })).toBeVisible();
+    await expect(page.getByText(/Bank name/i)).toBeVisible();
+    await expect(page.getByText(/Account number/i)).toBeVisible();
 
+    // Cancel returns to checkout
     await page.getByRole('button', { name: /Cancel — edit my order/i }).click();
     await expect(page.getByRole('heading', { name: 'Make payment' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: /Checkout/i })).toBeVisible();

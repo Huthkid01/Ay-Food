@@ -426,17 +426,24 @@ export default function CheckoutPage() {
   }
 
   function handleContinueWhatsApp() {
-    if (!completed) return;
-    openOrderOnWhatsApp(restaurant.whatsapp, completed.whatsapp);
-  }
-
-  function handleDismissCompleted() {
-    if (!completed) return;
-    const orderNumber = completed.orderNumber;
+    const whatsappDetails = completed?.whatsapp;
+    if (whatsappDetails) {
+      openOrderOnWhatsApp(restaurant.whatsapp, whatsappDetails);
+    }
+    // After opening WhatsApp, navigate to tracking
+    const orderNumber = completed?.orderNumber || pendingOrderNumber;
     setCompleted(null);
     setTransferOpen(false);
     setPendingForm(null);
-    navigate(`/track?order=${encodeURIComponent(orderNumber)}`);
+    if (orderNumber) navigate(`/track?order=${encodeURIComponent(orderNumber)}`);
+  }
+
+  function handleDismissCompleted() {
+    const orderNumber = completed?.orderNumber || pendingOrderNumber;
+    setCompleted(null);
+    setTransferOpen(false);
+    setPendingForm(null);
+    if (orderNumber) navigate(`/track?order=${encodeURIComponent(orderNumber)}`);
   }
 
 
@@ -780,9 +787,12 @@ export default function CheckoutPage() {
         onContinueWhatsApp={handleContinueWhatsApp}
         onClose={() => {
           if (placeOrder.isPending) return;
-          setTransferOpen(false);
-          setPendingForm(null);
-          if (completed) handleDismissCompleted();
+          if (completed) {
+            handleDismissCompleted();
+          } else {
+            setTransferOpen(false);
+            setPendingForm(null);
+          }
         }}
       />
     </div>
