@@ -11,6 +11,7 @@ import type { AdminOrder, AdminOrderStatus } from '../../services/admin-store';
 import { formatCurrency, cn } from '../../utils/helpers';
 import { useToast } from '../../components/ui/Toast';
 import { ConfirmModal } from '../../components/admin/DeleteConfirmModal';
+import { normalizePackName, comparePackNames } from '../../utils/pack-groups';
 
 const STATUSES: AdminOrderStatus[] = [
   'RECEIVED',
@@ -259,20 +260,37 @@ export default function AdminOrdersPage() {
                     )}
                   </div>
 
-                  <ul className="mb-4 space-y-2 text-sm">
-                    {order.items?.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex justify-between rounded-lg bg-brand-dark px-3 py-2"
-                      >
-                        <span>
-                          {item.food?.name ?? 'Item'} ({item.portionName}) ×{item.quantity}
-                          {item.packName ? ` · ${item.packName}` : ''}
-                        </span>
-                        <span className="text-brand-gold">{formatCurrency(item.totalPrice)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {(() => {
+                    const items = order.items ?? [];
+                    const packMap = new Map<string, typeof items>();
+                    for (const item of items) {
+                      const pack = normalizePackName(item.packName);
+                      if (!packMap.has(pack)) packMap.set(pack, []);
+                      packMap.get(pack)!.push(item);
+                    }
+                    const packs = [...packMap.keys()].sort(comparePackNames);
+                    return (
+                      <div className="mb-4 space-y-3 text-sm">
+                        {packs.map((packName) => (
+                          <div key={packName} className="rounded-xl border border-white/10 bg-brand-dark overflow-hidden">
+                            <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-brand-gold/80 border-b border-white/10">
+                              {packName}
+                            </div>
+                            <ul className="divide-y divide-white/5">
+                              {packMap.get(packName)!.map((item) => (
+                                <li key={item.id} className="flex justify-between px-3 py-2">
+                                  <span className="text-white/80">
+                                    {item.food?.name ?? 'Item'} ({item.portionName}) ×{item.quantity}
+                                  </span>
+                                  <span className="text-brand-gold">{formatCurrency(item.totalPrice)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {!order.paymentPaid && (
                     <button
