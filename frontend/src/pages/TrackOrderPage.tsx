@@ -55,7 +55,17 @@ export default function TrackOrderPage() {
     retry: false,
   });
 
-  const currentIndex = STATUS_STEPS.findIndex((s) => s.key === order?.status);
+  const currentIndex = (() => {
+    if (!order) return -1;
+    if (order.status === 'CANCELLED') return -1;
+    // Show “Order Received” as active only after admin confirms payment
+    if (!order.paymentPaid && order.status === 'RECEIVED') return -1;
+    if (!order.paymentPaid) {
+      // Unpaid but kitchen already moved on — still show kitchen progress
+      return STATUS_STEPS.findIndex((s) => s.key === order.status);
+    }
+    return STATUS_STEPS.findIndex((s) => s.key === order.status);
+  })();
   const showResults = hasSearch;
   const packGroups = useMemo(
     () => (order?.items ? groupItemsByPack(order.items) : []),
@@ -169,6 +179,18 @@ export default function TrackOrderPage() {
               </div>
             </div>
           </div>
+
+          {order.paymentPaid === false && order.status !== 'CANCELLED' && (
+            <div className="mb-6 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
+              Payment is awaiting confirmation. Once the restaurant confirms your OPay transfer,
+              you’ll get an email and your order will show as received.
+            </div>
+          )}
+          {order.paymentPaid && order.status === 'RECEIVED' && (
+            <div className="mb-6 rounded-xl border border-brand-green/35 bg-brand-green/10 px-4 py-3 text-sm text-brand-green/95">
+              Payment received — your order is confirmed.
+            </div>
+          )}
 
           {order.status === 'CANCELLED' ? (
             <div className="mb-8 rounded-xl border border-red-500/40 bg-red-500/10 p-4">

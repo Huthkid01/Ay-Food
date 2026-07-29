@@ -9,9 +9,7 @@ import { useCart } from '../contexts/CartContext';
 import { useSiteContentData } from '../hooks/useSiteContent';
 import { formatCurrency } from '../utils/helpers';
 import { openOrderOnWhatsApp, type WhatsAppOrderDetails } from '../utils/whatsapp-order';
-import { getKoraChargeNgn, getKoraProcessingFeeNgn } from '../utils/kora-fees';
 import { PaymentTransferModal } from '../components/checkout/PaymentTransferModal';
-import { KoraPaymentConfirmModal } from '../components/checkout/KoraPaymentConfirmModal';
 import { useToast } from '../components/ui/Toast';
 import {
   siteSettingsService,
@@ -23,15 +21,8 @@ import {
   locationBlockedHelp,
   resolveDeliveryAddressFromGps,
 } from '../utils/delivery-location';
-import {
-  clearPendingKoraCheckout,
-  createOrderAwaitingKora,
-  readPendingKoraCheckout,
-  savePendingKoraCheckout,
-  startKoraCheckout,
-  verifyKoraPayment,
-} from '../services/kora-payment.service';
-import { notifyAdminKoraPaid } from '../services/payment-notify.service';
+import { createOrderInDatabase } from '../services/orders.service';
+import { notifyAdminPaymentConfirmed } from '../services/payment-notify.service';
 import {
   computeDeliveryFee,
   DEFAULT_DELIVERY_RULES,
@@ -86,7 +77,7 @@ function estimateRideMinutes(distanceKm: number): string {
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { getFlattenedItems, subtotal, packFees, activePacks, clearCart } = useCart();
   const { restaurant } = useSiteContentData();
   const { showToast } = useToast();
@@ -99,9 +90,9 @@ export default function CheckoutPage() {
   });
   const deliveryRules = normalizeDeliveryRules(siteSettings?.delivery_rules ?? DEFAULT_DELIVERY_RULES);
   const [completed, setCompleted] = useState<CompletedOrder | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [pendingForm, setPendingForm] = useState<CheckoutForm | null>(null);
+  const [pendingOrderNumber, setPendingOrderNumber] = useState('');
   const [locating, setLocating] = useState(false);
   const [geocodingAddress, setGeocodingAddress] = useState(false);
   const [addressLookupFailed, setAddressLookupFailed] = useState(false);
@@ -190,94 +181,13 @@ export default function CheckoutPage() {
     orderType !== 'DELIVERY' ||
     (hasDeliveryAddress && Boolean(deliveryPoint) && !manualQuoteOnly && !geocodingAddress);
   const orderTotal = itemsTotal + deliveryFee;
-  const processingFee = getKoraProcessingFeeNgn(orderTotal);
-  const chargeTotal = getKoraChargeNgn(orderTotal);
 
   useEffect(() => {
-    const kora = searchParams.get('kora');
-    const reference =
-      searchParams.get('reference')?.trim() ||
-      readPendingKoraCheckout()?.reference ||
-      '';
-
-    if (kora !== 'return' || !reference || completed) return;
-
-    let cancelled = false;
-    setVerifying(true);
-
-    void (async () => {
-      try {
-        const result = await verifyKoraPayment(reference);
-        if (cancelled) return;
-
-        if (!result.paid) {
-          showToast(result.message || result.error || 'Payment not completed yet', 'error');
-          return;
-        }
-
-        const itemsTotal = (result.items ?? []).reduce(
-          (sum, i) => sum + Number(i.total_price ?? (i.unit_price ?? 0) * (i.quantity ?? 1)),
-          0,
-        );
-        const orderSubtotal = Number(result.subtotal ?? 0);
-        const packFees =
-          orderSubtotal > itemsTotal
-            ? Math.round(orderSubtotal - itemsTotal)
-            : undefined;
-
-        const whatsapp: WhatsAppOrderDetails = {
-          orderNumber: result.orderNumber,
-          customerName: result.customerName,
-          customerPhone: result.customerPhone,
-          customerEmail: result.customerEmail,
-          orderType: result.orderType === 'DELIVERY' ? 'DELIVERY' : 'PICKUP',
-          deliveryAddress: result.deliveryAddress ?? undefined,
-          deliveryInstructions: result.deliveryInstructions ?? undefined,
-          items: (result.items ?? []).map((i) => ({
-            foodName: i.food_name || 'Item',
-            portionName: i.portion_name || 'Standard',
-            quantity: i.quantity ?? 1,
-            unitPrice: i.unit_price ?? 0,
-            packName: i.pack_name ?? undefined,
-          })),
-          subtotal: result.subtotal,
-          packFees,
-          deliveryFee: result.deliveryFee,
-          tax: result.tax,
-          total: result.total,
-          paid: true,
-          paymentProvider: 'Kora',
-        };
-
-        // FormSubmit works reliably from the browser (not from Edge Functions).
-        void notifyAdminKoraPaid(whatsapp).catch(() => undefined);
-
-        clearCart();
-        clearCheckoutDraft();
-        clearPendingKoraCheckout();
-        setCompleted({
-          orderNumber: result.orderNumber,
-          total: result.total,
-          whatsapp,
-        });
-        setSearchParams({}, { replace: true });
-        showToast('Thank you for your order — you can track it anytime');
-      } catch (err) {
-        if (!cancelled) {
-          showToast(
-            err instanceof Error ? err.message : 'Could not verify payment',
-            'error',
-          );
-        }
-      } finally {
-        if (!cancelled) setVerifying(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [searchParams, completed, clearCart, setSearchParams, showToast]);
+    // Ignore leftover Kora return URLs from older checkouts
+    if (searchParams.get('kora') === 'return') {
+      showToast('Card checkout is no longer used — please pay via OPay transfer', 'error');
+    }
+  }, [searchParams, showToast]);
 
   useEffect(() => {
     if (orderType !== 'DELIVERY') {
@@ -397,7 +307,7 @@ export default function CheckoutPage() {
     }
   }
 
-  const payWithKora = useMutation({
+  const placeOrder = useMutation({
     mutationFn: async (form: CheckoutForm) => {
       if (form.orderType === 'DELIVERY' && !form.deliveryAddress?.trim()) {
         throw new Error('Please enter your delivery address before paying');
@@ -415,9 +325,9 @@ export default function CheckoutPage() {
       const draftDelivery =
         form.orderType === 'DELIVERY' && activePacks.length > 0 ? deliveryFee : 0;
       const draftTotal = subtotal + packFees + draftDelivery;
-      const orderNumber = nextOrderNumber();
+      const orderNumber = pendingOrderNumber || nextOrderNumber();
 
-      await createOrderAwaitingKora({
+      await createOrderInDatabase({
         orderNumber,
         orderType: form.orderType,
         customerName: form.customerName,
@@ -441,21 +351,45 @@ export default function CheckoutPage() {
         })),
       });
 
-      const checkout = await startKoraCheckout(orderNumber);
-      savePendingKoraCheckout({
-        reference: checkout.reference,
-        orderNumber: checkout.orderNumber,
+      const whatsapp: WhatsAppOrderDetails = {
+        orderNumber,
+        customerName: form.customerName,
+        customerPhone: form.customerPhone,
+        customerEmail: form.customerEmail,
+        orderType: form.orderType,
+        deliveryAddress: form.orderType === 'DELIVERY' ? form.deliveryAddress : undefined,
+        deliveryInstructions: form.deliveryInstructions,
+        items: items.map((i) => ({
+          foodName: i.foodName,
+          portionName: i.portionName,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          packName: i.packName,
+        })),
+        subtotal: subtotal + packFees,
+        packFees,
+        deliveryFee: draftDelivery,
+        total: draftTotal,
+        paid: false,
+        paymentProvider: 'OPay',
+        paymentNote:
+          'I have transferred via OPay. Please confirm when you see the payment — thank you!',
+      };
+
+      void notifyAdminPaymentConfirmed(whatsapp).catch(() => undefined);
+
+      clearCart();
+      clearCheckoutDraft();
+      setCompleted({
+        orderNumber,
+        total: draftTotal,
+        whatsapp,
       });
-      return checkout;
-    },
-    onSuccess: (checkout) => {
-      setConfirmOpen(false);
-      setPendingForm(null);
-      window.location.assign(checkout.checkoutUrl);
+      return { orderNumber, total: draftTotal, whatsapp };
     },
     onError: (err) => {
       showToast(
-        err instanceof Error ? err.message : 'Could not start payment. Please try again.',
+        err instanceof Error ? err.message : 'Could not place order. Please try again.',
         'error',
       );
     },
@@ -480,12 +414,14 @@ export default function CheckoutPage() {
       return;
     }
     setPendingForm(form);
-    setConfirmOpen(true);
+    setPendingOrderNumber(nextOrderNumber());
+    setTransferOpen(true);
   }
 
-  function handleConfirmPayment() {
-    if (!pendingForm || payWithKora.isPending) return;
-    payWithKora.mutate(pendingForm);
+  async function handleConfirmPaid() {
+    if (!pendingForm) throw new Error('Missing checkout details');
+    const result = await placeOrder.mutateAsync(pendingForm);
+    openOrderOnWhatsApp(restaurant.whatsapp, result.whatsapp);
   }
 
   function handleContinueWhatsApp() {
@@ -497,18 +433,9 @@ export default function CheckoutPage() {
     if (!completed) return;
     const orderNumber = completed.orderNumber;
     setCompleted(null);
+    setTransferOpen(false);
+    setPendingForm(null);
     navigate(`/track?order=${encodeURIComponent(orderNumber)}`);
-  }
-
-  if (verifying) {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <h1 className="mb-3 font-display text-3xl font-bold">
-          <span className="text-gradient">Confirming payment</span>
-        </h1>
-        <p className="text-white/60">Please wait while we verify your Kora payment…</p>
-      </div>
-    );
   }
 
   if (completed) {
@@ -521,13 +448,12 @@ export default function CheckoutPage() {
           Tracking number {completed.orderNumber} · {formatCurrency(completed.total)}
         </p>
         <p className="mb-4 text-sm text-white/50">
-          You can track your order anytime. A thank-you email with your items and tracking number
-          was sent to your inbox.
+          We will confirm your OPay payment shortly. You can track your order anytime — and send
+          your order details on WhatsApp so we can verify the transfer.
         </p>
         <PaymentTransferModal
           open
           confirmed
-          variant="kora"
           amount={completed.total}
           orderNumber={completed.orderNumber}
           bank={{
@@ -721,10 +647,10 @@ export default function CheckoutPage() {
           )}
 
           <div className="rounded-2xl border border-brand-gold/25 bg-brand-gold/10 px-4 py-4 text-sm">
-            <p className="font-medium text-brand-gold">Payment: Kora (card / bank)</p>
+            <p className="font-medium text-brand-gold">Payment: OPay transfer</p>
             <p className="mt-1.5 leading-relaxed text-secondary">
-              You’ll choose card or bank transfer on Kora’s secure checkout. Pay the exact amount
-              shown — then you’ll return here with your tracking number.
+              Transfer the exact total to our OPay account, then tap “I have made payment”. We’ll
+              open WhatsApp so you can send your order details for confirmation.
             </p>
           </div>
         </div>
@@ -816,12 +742,12 @@ export default function CheckoutPage() {
             ) : null}
             <div className="flex justify-between border-t border-brand-subtle pt-3 text-lg font-bold">
               <span>Total</span>
-              <span className="text-brand-gold">{formatCurrency(chargeTotal)}</span>
+              <span className="text-brand-gold">{formatCurrency(orderTotal)}</span>
             </div>
           </div>
           <button
             type="submit"
-            disabled={payWithKora.isPending || !canPayDelivery}
+            disabled={placeOrder.isPending || !canPayDelivery}
             className="btn-primary btn-ripple mt-6 hidden w-full py-3.5 sm:flex disabled:opacity-60"
           >
             {manualQuoteOnly
@@ -832,18 +758,18 @@ export default function CheckoutPage() {
                   ? 'Finding delivery fee…'
                   : addressLookupFailed || needsLocationForFee
                     ? 'Use location or clearer address'
-                    : payWithKora.isPending
-                      ? 'Starting Kora…'
-                      : 'Pay with Kora'}
+                    : placeOrder.isPending
+                      ? 'Placing order…'
+                      : 'Pay with OPay'}
           </button>
         </div>
 
         <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 w-[min(calc(100vw-5.5rem),20rem)] sm:hidden lg:col-span-2">
           <button
             type="submit"
-            disabled={payWithKora.isPending || !canPayDelivery}
+            disabled={placeOrder.isPending || !canPayDelivery}
             className="glass-panel flex w-full items-center justify-between gap-3 rounded-2xl p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)] disabled:opacity-60"
-            aria-label="Pay with Kora"
+            aria-label="Pay with OPay"
           >
             <span className="min-w-0 text-left">
               <span className="block text-sm font-semibold text-white">
@@ -855,11 +781,11 @@ export default function CheckoutPage() {
                       ? 'Finding fee…'
                       : addressLookupFailed || needsLocationForFee
                         ? 'Set location'
-                        : payWithKora.isPending
-                          ? 'Starting Kora…'
-                          : 'Pay with Kora'}
+                        : placeOrder.isPending
+                          ? 'Placing…'
+                          : 'Pay with OPay'}
               </span>
-              <span className="block text-xs text-secondary">{formatCurrency(chargeTotal)}</span>
+              <span className="block text-xs text-secondary">{formatCurrency(orderTotal)}</span>
             </span>
             <span className="shrink-0 rounded-xl bg-brand-gold px-3 py-2 text-xs font-bold text-white">
               Pay
@@ -868,16 +794,20 @@ export default function CheckoutPage() {
         </div>
       </form>
 
-      <KoraPaymentConfirmModal
-        open={confirmOpen}
-        orderTotal={orderTotal}
-        processingFee={processingFee}
-        chargeTotal={chargeTotal}
-        submitting={payWithKora.isPending}
-        onConfirm={handleConfirmPayment}
+      <PaymentTransferModal
+        open={transferOpen && !completed}
+        amount={orderTotal}
+        orderNumber={pendingOrderNumber}
+        bank={{
+          bankName: restaurant.bankName,
+          accountName: restaurant.accountName,
+          accountNumber: restaurant.accountNumber,
+        }}
+        onConfirmPaid={handleConfirmPaid}
+        onContinueWhatsApp={handleContinueWhatsApp}
         onClose={() => {
-          if (payWithKora.isPending) return;
-          setConfirmOpen(false);
+          if (placeOrder.isPending) return;
+          setTransferOpen(false);
           setPendingForm(null);
         }}
       />

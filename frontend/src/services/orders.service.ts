@@ -185,6 +185,44 @@ export async function updateOrderStatusInDatabase(
   return mapDbOrder({ ...row, order_items: [] });
 }
 
+/** Admin confirms OPay / bank transfer → marks paid, sets RECEIVED, emails customer. */
+export async function confirmPaymentReceivedInDatabase(
+  orderId: string,
+): Promise<{ orderNumber: string; emailed: boolean; alreadyCompleted: boolean }> {
+  assertSupabase();
+  const { getAdminToken } = await import('../lib/admin-token');
+  const adminToken = getAdminToken();
+  if (!adminToken) {
+    throw new Error('Admin session expired — please sign in again');
+  }
+
+  const { data, error } = await supabase.functions.invoke('confirm-payment', {
+    body: { orderId, adminToken },
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Could not confirm payment');
+  }
+
+  const payload = data as {
+    ok?: boolean;
+    error?: string;
+    orderNumber?: string;
+    emailed?: boolean;
+    alreadyCompleted?: boolean;
+  };
+
+  if (payload.error || !payload.ok) {
+    throw new Error(payload.error || 'Could not confirm payment');
+  }
+
+  return {
+    orderNumber: payload.orderNumber || '',
+    emailed: Boolean(payload.emailed),
+    alreadyCompleted: Boolean(payload.alreadyCompleted),
+  };
+}
+
 export type OrderStats = {
   totalOrders: number;
   totalRevenue: number;

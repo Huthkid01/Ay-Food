@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import {
   clearOrdersInDatabase,
+  confirmPaymentReceivedInDatabase,
   listOrdersFromDatabase,
   updateOrderStatusInDatabase,
 } from '../../services/orders.service';
@@ -19,6 +20,15 @@ const STATUSES: AdminOrderStatus[] = [
   'DELIVERED',
   'CANCELLED',
 ];
+
+const STATUS_LABELS: Record<AdminOrderStatus, string> = {
+  RECEIVED: 'Order Received',
+  PREPARING: 'Preparing',
+  PACKING: 'Packing',
+  OUT_FOR_DELIVERY: 'Out for Delivery',
+  DELIVERED: 'Delivered',
+  CANCELLED: 'Cancelled',
+};
 
 function formatOrderTime(iso: string) {
   try {
@@ -68,8 +78,10 @@ function paymentColor(order: AdminOrder) {
 
 function paymentProviderLabel(provider?: string) {
   if (!provider) return null;
-  if (provider.toUpperCase() === 'KORA') return 'Kora';
-  if (provider.toUpperCase() === 'CASH') return 'Cash / transfer';
+  const value = provider.toUpperCase();
+  if (value === 'KORA') return 'Kora';
+  if (value === 'BANK_TRANSFER' || value === 'OPAY') return 'OPay';
+  if (value === 'CASH') return 'Cash';
   return provider;
 }
 
@@ -97,6 +109,25 @@ export default function AdminOrdersPage() {
     },
     onError: (err) =>
       showToast(err instanceof Error ? err.message : 'Could not update order', 'error'),
+  });
+
+  const confirmPayment = useMutation({
+    mutationFn: (id: string) => confirmPaymentReceivedInDatabase(id),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-customers'] });
+      showToast(
+        result.alreadyCompleted
+          ? 'Payment was already marked received'
+          : result.emailed
+            ? 'Payment received — confirmation email sent to customer'
+            : 'Payment received (email could not be sent — check SMTP)',
+        result.emailed || result.alreadyCompleted ? 'success' : 'error',
+      );
+    },
+    onError: (err) =>
+      showToast(err instanceof Error ? err.message : 'Could not confirm payment', 'error'),
   });
 
   const clearOrders = useMutation({
@@ -134,7 +165,7 @@ export default function AdminOrdersPage() {
         <div>
           <h1 className="font-display text-3xl font-bold">Orders</h1>
           <p className="mt-1 text-sm text-white/50">
-            Live from database — paid Kora orders show as Paid
+            Live from database — confirm OPay payments, then update kitchen status
           </p>
         </div>
         <button
@@ -156,7 +187,8 @@ export default function AdminOrdersPage() {
       <div className="space-y-3">
         {orders.length === 0 && !error && (
           <p className="rounded-2xl border border-white/10 bg-brand-dark-light p-8 text-center text-white/50">
-            No orders yet. When a customer pays with Kora, the order appears here as Paid.
+            No orders yet. When a customer confirms an OPay transfer, the order appears here as
+            Awaiting payment.
           </p>
         )}
 
@@ -242,7 +274,20 @@ export default function AdminOrdersPage() {
                     ))}
                   </ul>
 
-                  <label className="mb-1 block text-xs text-white/50">Update kitchen status</label>
+                  {!order.paymentPaid && (
+                    <button
+                      type="button"
+                      disabled={confirmPayment.isPending}
+                      onClick={() => confirmPayment.mutate(order.id)}
+                      className="mb-3 w-full rounded-xl bg-brand-green/90 px-3 py-2.5 text-sm font-semibold text-white hover:bg-brand-green disabled:opacity-60"
+                    >
+                      {confirmPayment.isPending && confirmPayment.variables === order.id
+                        ? 'Confirming…'
+                        : 'Payment received'}
+                    </button>
+                  )}
+
+                  <label className="mb-1 block text-xs text-white/50">Update kitchen / tracking status</label>
                   <select
                     value={order.status}
                     onChange={(e) =>
@@ -255,7 +300,7 @@ export default function AdminOrdersPage() {
                   >
                     {STATUSES.map((s) => (
                       <option key={s} value={s}>
-                        {s.replaceAll('_', ' ')}
+                        {STATUS_LABELS[s] ?? s.replaceAll('_', ' ')}
                       </option>
                     ))}
                   </select>
