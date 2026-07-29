@@ -76,9 +76,20 @@ export function PaymentTransferModal({
 
   useEffect(() => {
     if (!open) return;
-    setStep(confirmed || isKora ? 'tracking' : 'pay');
-    setConfirming(false);
-  }, [open, orderNumber, confirmed, isKora]);
+    // Only reset to 'pay' when modal first opens (not already confirming)
+    if (!confirmed && !isKora) {
+      setStep('pay');
+      setConfirming(false);
+    }
+  }, [open, orderNumber]);
+
+  // Switch to tracking step as soon as order is confirmed
+  useEffect(() => {
+    if (confirmed || isKora) {
+      setStep('tracking');
+      setConfirming(false);
+    }
+  }, [confirmed, isKora]);
 
   useEffect(() => {
     if (!open) return;
@@ -114,7 +125,7 @@ export function PaymentTransferModal({
     setConfirming(true);
     try {
       await onConfirmPaid();
-      setStep('tracking');
+      // confirmed prop will become true → useEffect switches step to 'tracking'
     } catch {
       setConfirming(false);
     }
