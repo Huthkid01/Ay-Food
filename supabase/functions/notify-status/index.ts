@@ -1,9 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
-import {
-  orderEmailFromCompleteResult,
-  sendOutForDeliveryEmail,
-} from '../_shared/order-email.ts';
+import { sendOutForDeliveryEmail } from '../_shared/order-email.ts';
 
 // deno-lint-ignore no-explicit-any
 declare const EdgeRuntime: any;
@@ -28,7 +25,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'orderId, status and adminToken are required' }, 400);
     }
 
-    // Only send emails for statuses that customers care about
+    // Only send emails for statuses that need customer notification
     const EMAIL_STATUSES = ['OUT_FOR_DELIVERY'];
     if (!EMAIL_STATUSES.includes(status)) {
       return jsonResponse({ ok: true, emailed: false, reason: 'no email for this status' });
@@ -42,71 +39,57 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Fetch full order details for the email
-    const { data: orderData, error: orderError } = await admin.rpc('get_order_by_number_for_admin', {
-      p_order_id: orderId,
-      p_admin_token: adminToken,
+    // Verify admin token
+    const { error: tokenError } = await admin.rpc('require_admin_token', {
+      p_token: adminToken,
     });
-
-    if (orderError || !orderData) {
-      // Fallback: fetch order directly from DB without RPC
-      const { data: rawOrder, error: rawError } = await admin
-        .from('orders')
-        .select(`
-          id, order_number, status, order_type,
-          customer_name, customer_email, customer_phone,
-          subtotal, tax, delivery_fee, discount, total,
-          delivery_address,
-          order_items (
-            id, food_name, portion_name, quantity, unit_price, total_price, pack_name
-          )
-        `)
-        .eq('id', orderId)
-        .single();
-
-      if (rawError || !rawOrder) {
-        return jsonResponse({ error: 'Order not found' }, 404);
-      }
-
-      const emailPayload = {
-        order_number: String(rawOrder.order_number),
-        customer_name: String(rawOrder.customer_name),
-        customer_phone: String(rawOrder.customer_phone),
-        customer_email: String(rawOrder.customer_email),
-        order_type: String(rawOrder.order_type),
-        delivery_address: rawOrder.delivery_address ?? null,
-        subtotal: Number(rawOrder.subtotal ?? 0),
-        tax: Number(rawOrder.tax ?? 0),
-        delivery_fee: Number(rawOrder.delivery_fee ?? 0),
-        discount: Number(rawOrder.discount ?? 0),
-        total: Number(rawOrder.total ?? 0),
-        items: (rawOrder.order_items ?? []) as never,
-      };
-
-      // Respond immediately, email in background
-      const response = jsonResponse({ ok: true, emailed: true, status });
-      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-        EdgeRuntime.waitUntil(sendOutForDeliveryEmail(emailPayload));
-      } else {
-        sendOutForDeliveryEmail(emailPayload).catch(() => undefined);
-      }
-      return response;
+    if (tokenError) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
-    const emailPayload = orderEmailFromCompleteResult({
-      order: orderData.order as Record<string, unknown>,
-      items: (orderData.items ?? []) as never,
-    });
+    // Fetch order + items directly from DB
+    const { data: rawOrder, error: orderError } = await admin
+      .from('orders')
+      .select('id, order_number, order_type, customer_name, customer_email, customer_phone, subtotal, tax, delivery_fee, discount, total, delivery_address')
+      .eq('id', orderId)
+      .single();
 
+    if (orderError || !rawOrder) {
+      console.error('Order fetch error:', orderError);
+      return jsonResponse({ error: 'Order not found' }, 404);
+    }
+
+    const { data: itemRows } = await admin
+      .from('order_items')
+      .select('food_name, portion_name, quantity, unit_price, total_price, pack_name')
+      .eq('order_id', orderId);
+
+    const emailPayload = {
+      order_number: String(rawOrder.order_number),
+      customer_name: String(rawOrder.customer_name),
+      customer_phone: String(rawOrder.customer_phone),
+      customer_email: String(rawOrder.customer_email),
+      order_type: String(rawOrder.order_type),
+      delivery_address: rawOrder.delivery_address ?? null,
+      subtotal: Number(rawOrder.subtotal ?? 0),
+      tax: Number(rawOrder.tax ?? 0),
+      delivery_fee: Number(rawOrder.delivery_fee ?? 0),
+      discount: Number(rawOrder.discount ?? 0),
+      total: Number(rawOrder.total ?? 0),
+      items: (itemRows ?? []) as never,
+    };
+
+    // Respond to admin instantly — email fires in background
     const response = jsonResponse({ ok: true, emailed: true, status });
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
       EdgeRuntime.waitUntil(sendOutForDeliveryEmail(emailPayload));
     } else {
-      sendOutForDeliveryEmail(emailPayload).catch(() => undefined);
+      sendOutForDeliveryEmail(emailPayload).catch((e) => console.error('Email error:', e));
     }
     return response;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not send notification';
+    console.error('notify-status error:', err);
     return jsonResponse({ error: message }, 400);
   }
 });
