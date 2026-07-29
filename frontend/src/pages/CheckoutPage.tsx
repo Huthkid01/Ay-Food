@@ -440,7 +440,8 @@ export default function CheckoutPage() {
   }
 
 
-  if (items.length === 0) {
+  // Don't show empty cart screen if the order was just placed — modal is still open
+  if (items.length === 0 && !transferOpen) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <p className="text-white/60">Your cart is empty</p>
