@@ -420,8 +420,9 @@ export default function CheckoutPage() {
 
   async function handleConfirmPaid() {
     if (!pendingForm) throw new Error('Missing checkout details');
-    const result = await placeOrder.mutateAsync(pendingForm);
-    openOrderOnWhatsApp(restaurant.whatsapp, result.whatsapp);
+    await placeOrder.mutateAsync(pendingForm);
+    // Modal automatically switches to "Payment awaiting confirmation" step.
+    // Customer can then choose to open WhatsApp or skip to tracking.
   }
 
   function handleContinueWhatsApp() {
@@ -438,36 +439,6 @@ export default function CheckoutPage() {
     navigate(`/track?order=${encodeURIComponent(orderNumber)}`);
   }
 
-  if (completed) {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-16 text-center">
-        <h1 className="mb-2 font-display text-3xl font-bold">
-          <span className="text-gradient">Thank you for your order</span>
-        </h1>
-        <p className="mb-6 text-white/60">
-          Tracking number {completed.orderNumber} · {formatCurrency(completed.total)}
-        </p>
-        <p className="mb-4 text-sm text-white/50">
-          We will confirm your OPay payment shortly. You can track your order anytime — and send
-          your order details on WhatsApp so we can verify the transfer.
-        </p>
-        <PaymentTransferModal
-          open
-          confirmed
-          amount={completed.total}
-          orderNumber={completed.orderNumber}
-          bank={{
-            bankName: restaurant.bankName,
-            accountName: restaurant.accountName,
-            accountNumber: restaurant.accountNumber,
-          }}
-          onConfirmPaid={() => undefined}
-          onContinueWhatsApp={handleContinueWhatsApp}
-          onClose={handleDismissCompleted}
-        />
-      </div>
-    );
-  }
 
   if (items.length === 0) {
     return (
@@ -795,9 +766,10 @@ export default function CheckoutPage() {
       </form>
 
       <PaymentTransferModal
-        open={transferOpen && !completed}
+        open={transferOpen}
+        confirmed={Boolean(completed)}
         amount={orderTotal}
-        orderNumber={pendingOrderNumber}
+        orderNumber={completed?.orderNumber || pendingOrderNumber}
         bank={{
           bankName: restaurant.bankName,
           accountName: restaurant.accountName,
@@ -809,6 +781,7 @@ export default function CheckoutPage() {
           if (placeOrder.isPending) return;
           setTransferOpen(false);
           setPendingForm(null);
+          if (completed) handleDismissCompleted();
         }}
       />
     </div>
