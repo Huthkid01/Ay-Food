@@ -522,9 +522,19 @@ async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boole
 }
 
 /**
- * After Kora payment:
- * 1) FormSubmit AJAX → owner alert (browser also sends; no page redirect)
- * 2) Truehost SMTP → customer thank-you / order summary
+ * After admin confirms OPay payment:
+ * Customer thank-you only (Truehost SMTP).
+ * Owner FormSubmit alert is sent earlier when the customer taps “I have made payment”.
+ */
+export async function sendCustomerConfirmationEmail(
+  order: OrderEmailPayload,
+): Promise<boolean> {
+  return await sendCustomerThankYou(order);
+}
+
+/**
+ * Legacy helper (Kora / tests): owner FormSubmit + customer thank-you.
+ * Prefer sendCustomerConfirmationEmail for admin “Payment received”.
  */
 export async function sendOrderPaidEmails(order: OrderEmailPayload): Promise<boolean> {
   await sendOwnerFormSubmitAlert(order);

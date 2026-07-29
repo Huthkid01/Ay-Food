@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import {
   orderEmailFromCompleteResult,
-  sendOrderPaidEmails,
+  sendCustomerConfirmationEmail,
 } from '../_shared/order-email.ts';
 
 Deno.serve(async (req) => {
@@ -54,7 +54,8 @@ Deno.serve(async (req) => {
 
     let emailed = Boolean(result.email_sent);
     if (!emailed) {
-      emailed = await sendOrderPaidEmails(
+      // Customer confirmation only — FormSubmit already alerted owner at checkout
+      emailed = await sendCustomerConfirmationEmail(
         orderEmailFromCompleteResult({
           order: result.order,
           items: result.items as never,

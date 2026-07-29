@@ -72,7 +72,7 @@ function buildOwnerAlertFields(order: WhatsAppOrderDetails): Record<string, stri
       : 'Pickup (no delivery address)';
 
   return {
-    _subject: `New paid order — ${order.orderNumber}`,
+    _subject: `New order awaiting payment — ${order.orderNumber}`,
     _replyto: order.customerEmail?.trim() || '',
     name: order.customerName,
     email: order.customerEmail?.trim() || '—',
