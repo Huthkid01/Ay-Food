@@ -162,7 +162,7 @@ export function PaymentTransferModal({
                 ? 'Transfer the exact amount, then confirm below. Close to keep editing your order.'
                 : isKora
                   ? 'You can track your order anytime — or contact us on WhatsApp with your order summary.'
-                  : 'We\'ve received your payment notification. Save your tracking number — your order will be confirmed once the admin verifies your transfer.'}
+                  : 'We\'ve received your payment notification. Once your transfer is verified, you\'ll get an order confirmation email.'}
             </p>
           </div>
           {canDismiss && (
@@ -248,7 +248,7 @@ export function PaymentTransferModal({
             <p className="text-center text-sm text-white/65">
               {isKora
                 ? 'Thank you for your order. You can track it anytime from Track Order. You can also contact us on WhatsApp — we’ll open a chat with your order summary.'
-                : 'Your order has been placed and is awaiting payment confirmation. Save your tracking number, then send us your order summary on WhatsApp so we can verify your transfer quickly.'}
+                : 'Your order has been placed and is awaiting payment confirmation. Once we verify your transfer, you will receive an order confirmation email. Save your tracking number below.'}
             </p>
 
             <button
