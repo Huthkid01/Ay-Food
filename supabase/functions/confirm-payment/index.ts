@@ -5,6 +5,9 @@ import {
   sendCustomerConfirmationEmail,
 } from '../_shared/order-email.ts';
 
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: any;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -52,31 +55,46 @@ Deno.serve(async (req) => {
       payment_reference?: string;
     };
 
-    let emailed = Boolean(result.email_sent);
-    if (!emailed) {
-      // Customer confirmation only — FormSubmit already alerted owner at checkout
-      emailed = await sendCustomerConfirmationEmail(
-        orderEmailFromCompleteResult({
-          order: result.order,
-          items: result.items as never,
-        }),
-      );
-      if (emailed) {
-        await admin.rpc('admin_mark_payment_email_sent', {
-          p_admin_token: adminToken,
-          p_order_id: orderId,
-        });
-      }
-    }
+    const alreadyCompleted = Boolean(result.already_completed);
+    const alreadyEmailed = Boolean(result.email_sent);
 
-    return jsonResponse({
+    // Respond to admin immediately — no waiting for SMTP
+    const response = jsonResponse({
       ok: true,
-      alreadyCompleted: Boolean(result.already_completed),
-      emailed,
+      alreadyCompleted,
+      emailed: alreadyEmailed || !alreadyCompleted,
       orderNumber: String(result.order.order_number ?? ''),
       status: String(result.order.status ?? 'RECEIVED'),
       paymentReference: result.payment_reference ?? null,
     });
+
+    // Send the customer email in the background after responding
+    if (!alreadyEmailed) {
+      const emailPayload = orderEmailFromCompleteResult({
+        order: result.order,
+        items: result.items as never,
+      });
+
+      const sendAndMark = async () => {
+        const emailed = await sendCustomerConfirmationEmail(emailPayload);
+        if (emailed) {
+          await admin.rpc('admin_mark_payment_email_sent', {
+            p_admin_token: adminToken,
+            p_order_id: orderId,
+          });
+        }
+      };
+
+      // waitUntil keeps the function alive after the response is sent
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+        EdgeRuntime.waitUntil(sendAndMark());
+      } else {
+        // Fallback: fire-and-forget (still non-blocking for the response)
+        sendAndMark().catch(() => undefined);
+      }
+    }
+
+    return response;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not confirm payment';
     return jsonResponse({ error: message }, 400);
