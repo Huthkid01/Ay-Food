@@ -582,7 +582,7 @@ export default function CheckoutPage() {
           </div>
           <div>
             <label htmlFor="checkout-phone" className="mb-1.5 block text-sm text-secondary">
-              Phone (WhatsApp number)
+              Calling number
             </label>
             <input
               id="checkout-phone"
