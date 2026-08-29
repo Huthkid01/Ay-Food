@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import {
   clearOrdersInDatabase,
-  confirmPaymentReceivedInDatabase,
   listOrdersFromDatabase,
   notifyOrderStatusInDatabase,
   updateOrderStatusInDatabase,
@@ -14,8 +13,8 @@ import { useToast } from '../../components/ui/Toast';
 import { ConfirmModal } from '../../components/admin/DeleteConfirmModal';
 import { normalizePackName, comparePackNames } from '../../utils/pack-groups';
 
-const STATUSES: AdminOrderStatus[] = [
-  'RECEIVED',
+/** Kitchen / delivery tracking — payment is auto-confirmed via Kora (Paid badge). */
+const KITCHEN_STATUSES: AdminOrderStatus[] = [
   'PREPARING',
   'PACKING',
   'OUT_FOR_DELIVERY',
@@ -31,6 +30,10 @@ const STATUS_LABELS: Record<AdminOrderStatus, string> = {
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled',
 };
+
+function kitchenStatusLabel(status: AdminOrderStatus) {
+  return STATUS_LABELS[status] ?? status.replaceAll('_', ' ');
+}
 
 function formatOrderTime(iso: string) {
   try {
@@ -118,25 +121,6 @@ export default function AdminOrdersPage() {
       showToast(err instanceof Error ? err.message : 'Could not update order', 'error'),
   });
 
-  const confirmPayment = useMutation({
-    mutationFn: (id: string) => confirmPaymentReceivedInDatabase(id),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-customers'] });
-      showToast(
-        result.alreadyCompleted
-          ? 'Payment was already marked received'
-          : result.emailed
-            ? 'Payment received — confirmation email sent to customer'
-            : 'Payment received (email could not be sent — check SMTP)',
-        result.emailed || result.alreadyCompleted ? 'success' : 'error',
-      );
-    },
-    onError: (err) =>
-      showToast(err instanceof Error ? err.message : 'Could not confirm payment', 'error'),
-  });
-
   const clearOrders = useMutation({
     mutationFn: () => clearOrdersInDatabase(),
     onSuccess: (result) => {
@@ -172,7 +156,7 @@ export default function AdminOrdersPage() {
         <div>
           <h1 className="font-display text-3xl font-bold">Orders</h1>
           <p className="mt-1 text-sm text-white/50">
-            Live from database — confirm OPay payments, then update kitchen status
+            Live from database — Kora payments show as Paid automatically; update kitchen status below
           </p>
         </div>
         <button
@@ -194,8 +178,7 @@ export default function AdminOrdersPage() {
       <div className="space-y-3">
         {orders.length === 0 && !error && (
           <p className="rounded-2xl border border-white/10 bg-brand-dark-light p-8 text-center text-white/50">
-            No orders yet. When a customer confirms an OPay transfer, the order appears here as
-            Awaiting payment.
+            No orders yet. When a customer pays with Kora, the order appears here as Paid.
           </p>
         )}
 
@@ -229,7 +212,7 @@ export default function AdminOrdersPage() {
                         statusColor(order.status),
                       )}
                     >
-                      {order.status.replaceAll('_', ' ')}
+                      {kitchenStatusLabel(order.status)}
                     </span>
                   </div>
                   <p className="mt-1 truncate text-sm text-white/50">
@@ -332,33 +315,34 @@ export default function AdminOrdersPage() {
                     );
                   })()}
 
-                  {!order.paymentPaid && (
-                    <button
-                      type="button"
-                      disabled={confirmPayment.isPending}
-                      onClick={() => confirmPayment.mutate(order.id)}
-                      className="mb-3 w-full rounded-xl bg-brand-green/90 px-3 py-2.5 text-sm font-semibold text-white hover:bg-brand-green disabled:opacity-60"
-                    >
-                      {confirmPayment.isPending && confirmPayment.variables === order.id
-                        ? 'Confirming…'
-                        : 'Payment received'}
-                    </button>
+                  <label className="mb-1 block text-xs text-white/50">
+                    Update kitchen / tracking status
+                  </label>
+                  {order.status === 'RECEIVED' && order.paymentPaid && (
+                    <p className="mb-2 text-xs text-brand-green/90">
+                      Payment confirmed — order received. Choose the next kitchen step below.
+                    </p>
                   )}
-
-                  <label className="mb-1 block text-xs text-white/50">Update kitchen / tracking status</label>
                   <select
-                    value={order.status}
-                    onChange={(e) =>
-                      updateStatus.mutate({
-                        id: order.id,
-                        status: e.target.value as AdminOrderStatus,
-                      })
-                    }
+                    value={order.status === 'RECEIVED' ? '' : order.status}
+                    onChange={(e) => {
+                      const next = e.target.value as AdminOrderStatus;
+                      if (!next) return;
+                      updateStatus.mutate({ id: order.id, status: next });
+                    }}
                     className="w-full rounded-xl border border-white/10 bg-brand-dark px-3 py-2 text-sm outline-none focus:border-brand-gold"
                   >
-                    {STATUSES.map((s) => (
+                    {order.status === 'RECEIVED' && (
+                      <option value="">Order Received (paid) — select next step</option>
+                    )}
+                    {(order.status === 'RECEIVED'
+                      ? KITCHEN_STATUSES
+                      : [order.status as AdminOrderStatus, ...KITCHEN_STATUSES].filter(
+                          (s, i, arr) => arr.indexOf(s) === i && s !== 'RECEIVED',
+                        )
+                    ).map((s) => (
                       <option key={s} value={s}>
-                        {STATUS_LABELS[s] ?? s.replaceAll('_', ' ')}
+                        {kitchenStatusLabel(s)}
                       </option>
                     ))}
                   </select>

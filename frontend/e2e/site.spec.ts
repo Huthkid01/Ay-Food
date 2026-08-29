@@ -95,7 +95,7 @@ test.describe('Ay Food storefront', () => {
     await expect(page.getByRole('link', { name: /View cart/i })).toBeVisible({ timeout: 8_000 });
   });
 
-  test('checkout shows OPay transfer payment details', async ({ page }) => {
+  test('checkout shows Kora payment confirm before redirect', async ({ page }) => {
     await addAmalaToCart(page);
     await page.waitForFunction(() => {
       try {
@@ -110,35 +110,30 @@ test.describe('Ay Food storefront', () => {
 
     await page.goto('/checkout');
     await fillCheckout(page);
-    await expect(page.getByText(/Payment: OPay/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /Pay with OPay/i }).first()).toBeVisible();
+    await expect(page.getByText(/Payment: Kora/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Pay with Kora/i }).first()).toBeVisible();
 
-    // Open payment modal
-    await page.getByRole('button', { name: /Pay with OPay/i }).first().click();
-    await expect(page.getByRole('heading', { name: 'Make payment' })).toBeVisible();
-    await expect(page.getByText(/Amount to pay/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /I have made payment/i })).toBeVisible();
-    await expect(page.getByText(/Bank name/i)).toBeVisible();
-    await expect(page.getByText(/Account number/i)).toBeVisible();
+    await page.getByRole('button', { name: /Pay with Kora/i }).first().click();
+    await expect(page.getByRole('heading', { name: 'Attention!!!' })).toBeVisible();
+    await expect(page.getByText(/You will pay now/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /I Understand/i })).toBeVisible();
 
-    // Cancel returns to checkout
-    await page.getByRole('button', { name: /Cancel — edit my order/i }).click();
-    await expect(page.getByRole('heading', { name: 'Make payment' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('heading', { name: 'Attention!!!' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: /Checkout/i })).toBeVisible();
-    await expect(page.getByText(/Amala/i).first()).toBeVisible();
   });
 
-  test('full OPay transfer confirmation is out of scope for automated e2e', async () => {
+  test('full Kora payment redirect is out of scope for automated e2e', async () => {
     test.skip(
       true,
-      'Placing a live order + WhatsApp redirect is covered manually.',
+      'Placing a live Kora order + return redirect is covered manually.',
     );
   });
 
-  test('admin payment received after OPay transfer is out of scope without live order', async () => {
+  test('admin kitchen status updates are out of scope without live order', async () => {
     test.skip(
       true,
-      'Requires a live unpaid order; admin Payment received + email covered manually.',
+      'Requires a live paid Kora order; admin tracking updates covered manually.',
     );
   });
 
