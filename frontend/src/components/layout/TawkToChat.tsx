@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 declare global {
@@ -11,6 +11,7 @@ declare global {
       start?: (options?: { showWidget?: boolean }) => void;
       onLoad?: () => void;
       onChatMaximized?: () => void;
+      onChatMinimized?: () => void;
       customStyle?: Record<string, unknown>;
     };
     Tawk_LoadStart?: Date;
@@ -25,15 +26,30 @@ function hideTawkPreviewBubbles() {
     const title = (iframe.getAttribute('title') || '').toLowerCase();
     const name = (iframe.getAttribute('name') || '').toLowerCase();
     const id = (iframe.id || '').toLowerCase();
+    const src = (iframe.getAttribute('src') || '').toLowerCase();
+    const isTawk =
+      src.includes('tawk') ||
+      id.includes('tawk') ||
+      name.includes('tawk') ||
+      title.includes('chat') ||
+      title.includes('tawk');
     const isPreview =
       title.includes('bubble') ||
       title.includes('preview') ||
       title.includes('popup') ||
       title.includes('greeting') ||
       title.includes('message from') ||
+      title.includes('attention') ||
+      title.includes('we are here') ||
       name.includes('bubble') ||
       id.includes('bubble');
-    if (!isPreview) return;
+
+    const rect = iframe.getBoundingClientRect();
+    // Tawk attention grabber ("We are here") is a wide short image beside the round button.
+    const isAttentionGrabber =
+      isTawk && rect.width > 90 && rect.height > 0 && rect.height < 90;
+
+    if (!isPreview && !isAttentionGrabber) return;
     iframe.style.setProperty('display', 'none', 'important');
     iframe.style.setProperty('visibility', 'hidden', 'important');
     iframe.style.setProperty('pointer-events', 'none', 'important');
@@ -50,7 +66,9 @@ function injectPreviewCss() {
     iframe[title*="preview" i],
     iframe[title*="popup" i],
     iframe[title*="greeting" i],
-    iframe[title*="message from" i] {
+    iframe[title*="message from" i],
+    iframe[title*="attention" i],
+    iframe[title*="we are here" i] {
       display: none !important;
       visibility: hidden !important;
       pointer-events: none !important;
@@ -99,6 +117,7 @@ function runWhenIdle(fn: () => void, timeoutMs = 4000) {
 export function TawkToChat() {
   const { pathname } = useLocation();
   const isAdmin = pathname.startsWith('/admin') || pathname === '/login';
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     if (isAdmin) return;
@@ -148,6 +167,13 @@ export function TawkToChat() {
     api.onChatMaximized = () => {
       prevMaximized?.();
       userOpened = true;
+      setChatOpen(true);
+    };
+
+    const prevMinimized = api.onChatMinimized;
+    api.onChatMinimized = () => {
+      prevMinimized?.();
+      setChatOpen(false);
     };
 
     const id = window.setInterval(apply, 400);
@@ -160,5 +186,19 @@ export function TawkToChat() {
     };
   }, [isAdmin]);
 
-  return null;
+  if (isAdmin || chatOpen) return null;
+
+  return (
+    <div
+      className="pointer-events-none fixed z-[2147483000] max-w-[7.5rem] text-right"
+      style={{
+        right: 'max(0.75rem, env(safe-area-inset-right))',
+        bottom: 'calc(4.75rem + env(safe-area-inset-bottom))',
+      }}
+    >
+      <span className="inline-block rounded-full bg-brand-gold px-2.5 py-1 text-[11px] font-semibold leading-tight text-white shadow-lg">
+        Customer support
+      </span>
+    </div>
+  );
 }
