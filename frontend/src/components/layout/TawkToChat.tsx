@@ -4,13 +4,12 @@ import { useLocation } from 'react-router-dom';
 declare global {
   interface Window {
     Tawk_API?: {
-      autoStart?: boolean;
       hideWidget?: () => void;
       showWidget?: () => void;
       minimize?: () => void;
-      start?: (options?: { showWidget?: boolean }) => void;
       onLoad?: () => void;
       onChatMaximized?: () => void;
+      onChatMinimized?: () => void;
       customStyle?: Record<string, unknown>;
     };
     Tawk_LoadStart?: Date;
@@ -18,73 +17,71 @@ declare global {
 }
 
 const TAWK_SRC = 'https://embed.tawk.to/6a65570b15ab181d4e3c7bf2/1judto3bv';
-const PREVIEW_STYLE_ID = 'tawk-hide-greeting-preview';
+const HIDDEN_ATTR = 'data-ay-tawk-overlay-hidden';
 
-function hideTawkPreviewBubbles() {
-  document.querySelectorAll('iframe').forEach((iframe) => {
-    const title = (iframe.getAttribute('title') || '').toLowerCase();
-    const name = (iframe.getAttribute('name') || '').toLowerCase();
-    const id = (iframe.id || '').toLowerCase();
-    const src = (iframe.getAttribute('src') || '').toLowerCase();
-    const isTawk =
-      src.includes('tawk') ||
-      id.includes('tawk') ||
-      name.includes('tawk') ||
-      title.includes('chat') ||
-      title.includes('tawk');
-    const isPreview =
-      title.includes('bubble') ||
-      title.includes('preview') ||
-      title.includes('popup') ||
-      title.includes('greeting') ||
-      title.includes('message from') ||
-      title.includes('attention') ||
-      title.includes('we are here') ||
-      name.includes('bubble') ||
-      id.includes('bubble');
+function isTawkIframe(iframe: HTMLIFrameElement) {
+  const title = (iframe.getAttribute('title') || '').toLowerCase();
+  const name = (iframe.getAttribute('name') || '').toLowerCase();
+  const id = (iframe.id || '').toLowerCase();
+  const src = (iframe.getAttribute('src') || '').toLowerCase();
+  return (
+    src.includes('tawk') ||
+    id.includes('tawk') ||
+    name.includes('tawk') ||
+    title.includes('tawk') ||
+    title.includes('chat')
+  );
+}
+
+function hideOverlay(iframe: HTMLIFrameElement) {
+  if (!iframe.getAttribute(HIDDEN_ATTR)) {
+    iframe.setAttribute(HIDDEN_ATTR, '1');
+  }
+  iframe.style.setProperty('display', 'none', 'important');
+  iframe.style.setProperty('visibility', 'hidden', 'important');
+  iframe.style.setProperty('pointer-events', 'none', 'important');
+  iframe.style.setProperty('opacity', '0', 'important');
+}
+
+function restoreOverlay(iframe: HTMLIFrameElement) {
+  if (!iframe.hasAttribute(HIDDEN_ATTR)) return;
+  iframe.removeAttribute(HIDDEN_ATTR);
+  iframe.style.removeProperty('display');
+  iframe.style.removeProperty('visibility');
+  iframe.style.removeProperty('pointer-events');
+  iframe.style.removeProperty('opacity');
+}
+
+/** Hide only the outside preview / “We are here” grabber. Keep the button and in-chat UI. */
+function hideExternalTawkOverlays() {
+  document.querySelectorAll('iframe').forEach((node) => {
+    const iframe = node as HTMLIFrameElement;
+    if (!isTawkIframe(iframe)) return;
 
     const rect = iframe.getBoundingClientRect();
-    // Tawk attention grabber ("We are here") is a wide short image beside the round button.
-    const isAttentionGrabber =
-      isTawk && rect.width > 90 && rect.height > 0 && rect.height < 90;
+    if (rect.width < 1 || rect.height < 1) return;
 
-    if (!isPreview && !isAttentionGrabber) return;
-    iframe.style.setProperty('display', 'none', 'important');
-    iframe.style.setProperty('visibility', 'hidden', 'important');
-    iframe.style.setProperty('pointer-events', 'none', 'important');
-    iframe.style.setProperty('opacity', '0', 'important');
+    const isLauncher = rect.width <= 85 && rect.height <= 85;
+    const isInChatWindow = rect.width >= 240 && rect.height >= 240;
+    if (isLauncher || isInChatWindow) {
+      restoreOverlay(iframe);
+      return;
+    }
+
+    hideOverlay(iframe);
   });
 }
 
-function injectPreviewCss() {
-  if (document.getElementById(PREVIEW_STYLE_ID)) return;
-  const style = document.createElement('style');
-  style.id = PREVIEW_STYLE_ID;
-  style.textContent = `
-    iframe[title*="bubble" i],
-    iframe[title*="preview" i],
-    iframe[title*="popup" i],
-    iframe[title*="greeting" i],
-    iframe[title*="message from" i],
-    iframe[title*="attention" i],
-    iframe[title*="we are here" i] {
-      display: none !important;
-      visibility: hidden !important;
-      pointer-events: none !important;
-      opacity: 0 !important;
-      width: 0 !important;
-      height: 0 !important;
-    }
-  `;
-  document.head.appendChild(style);
+function restoreExternalTawkOverlays() {
+  document.querySelectorAll(`iframe[${HIDDEN_ATTR}]`).forEach((node) => {
+    restoreOverlay(node as HTMLIFrameElement);
+  });
 }
 
 function loadTawkScript() {
   if (document.getElementById('tawk-to-script')) return;
   window.Tawk_API = window.Tawk_API || {};
   window.Tawk_LoadStart = new Date();
-  // Do not auto-connect: Tawk triggers fire the welcome popup as soon as the socket starts.
-  window.Tawk_API.autoStart = false;
   window.Tawk_API.customStyle = {
     visibility: {
       desktop: { position: 'br', xOffset: 16, yOffset: 16 },
@@ -110,8 +107,8 @@ function runWhenIdle(fn: () => void, timeoutMs = 4000) {
 }
 
 /**
- * Loads Tawk after first paint so the site content shows first.
- * Keeps the chat button, but does not auto-open the welcome popup.
+ * Site content shows first. Chat button stays.
+ * Welcome + shortcuts stay inside the widget; they do not pop over the page.
  */
 export function TawkToChat() {
   const { pathname } = useLocation();
@@ -119,7 +116,6 @@ export function TawkToChat() {
 
   useEffect(() => {
     if (isAdmin) return;
-    injectPreviewCss();
     let cancelled = false;
     const cancelIdle = runWhenIdle(() => {
       if (!cancelled) loadTawkScript();
@@ -131,9 +127,10 @@ export function TawkToChat() {
   }, [isAdmin]);
 
   useEffect(() => {
-    let connected = false;
     let userOpened = false;
-    const observer = new MutationObserver(() => hideTawkPreviewBubbles());
+    const observer = new MutationObserver(() => {
+      if (!userOpened) hideExternalTawkOverlays();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
 
     const apply = () => {
@@ -144,8 +141,12 @@ export function TawkToChat() {
         return;
       }
       api.showWidget?.();
-      if (!userOpened) api.minimize?.();
-      hideTawkPreviewBubbles();
+      if (!userOpened) {
+        api.minimize?.();
+        hideExternalTawkOverlays();
+      } else {
+        restoreExternalTawkOverlays();
+      }
     };
 
     apply();
@@ -154,10 +155,6 @@ export function TawkToChat() {
     const prevLoad = api.onLoad;
     api.onLoad = () => {
       prevLoad?.();
-      if (!isAdmin && !connected) {
-        connected = true;
-        api.start?.({ showWidget: true });
-      }
       apply();
     };
 
@@ -165,6 +162,14 @@ export function TawkToChat() {
     api.onChatMaximized = () => {
       prevMaximized?.();
       userOpened = true;
+      restoreExternalTawkOverlays();
+    };
+
+    const prevMinimized = api.onChatMinimized;
+    api.onChatMinimized = () => {
+      prevMinimized?.();
+      userOpened = false;
+      hideExternalTawkOverlays();
     };
 
     const id = window.setInterval(apply, 400);
