@@ -52,7 +52,7 @@ function restoreOverlay(iframe: HTMLIFrameElement) {
   iframe.style.removeProperty('opacity');
 }
 
-/** Hide only the outside preview / “We are here” grabber. Keep the button and in-chat UI. */
+/** When the chat is closed, keep only the round button. Hide welcome/shortcut popups on the page. */
 function hideExternalTawkOverlays() {
   document.querySelectorAll('iframe').forEach((node) => {
     const iframe = node as HTMLIFrameElement;
@@ -62,8 +62,7 @@ function hideExternalTawkOverlays() {
     if (rect.width < 1 || rect.height < 1) return;
 
     const isLauncher = rect.width <= 85 && rect.height <= 85;
-    const isInChatWindow = rect.width >= 240 && rect.height >= 240;
-    if (isLauncher || isInChatWindow) {
+    if (isLauncher) {
       restoreOverlay(iframe);
       return;
     }
@@ -108,7 +107,7 @@ function runWhenIdle(fn: () => void, timeoutMs = 4000) {
 
 /**
  * Site content shows first. Chat button stays.
- * Welcome + shortcuts stay inside the widget; they do not pop over the page.
+ * Welcome / shortcut cards are hidden on the page; they can still appear inside an open chat.
  */
 export function TawkToChat() {
   const { pathname } = useLocation();
@@ -172,13 +171,11 @@ export function TawkToChat() {
       hideExternalTawkOverlays();
     };
 
-    const id = window.setInterval(apply, 400);
-    const stop = window.setTimeout(() => window.clearInterval(id), 8000);
+    const id = window.setInterval(apply, 600);
 
     return () => {
       observer.disconnect();
       window.clearInterval(id);
-      window.clearTimeout(stop);
     };
   }, [isAdmin]);
 
