@@ -27,6 +27,7 @@ type OrderEmailPayload = {
   customer_email: string;
   order_type: string;
   delivery_address?: string | null;
+  delivery_instructions?: string | null;
   subtotal?: number;
   tax?: number;
   delivery_fee?: number;
@@ -521,6 +522,69 @@ async function sendOwnerFormSubmitAlert(order: OrderEmailPayload): Promise<boole
   }
 }
 
+function telegramEscape(value: string) {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function buildOwnerTelegramMessage(order: OrderEmailPayload): string {
+  const delivery = isDeliveryOrder(order);
+  const orderType = delivery ? 'Delivery' : 'Pickup';
+  const address = delivery
+    ? order.delivery_address?.trim() || '—'
+    : 'Pickup (no delivery address)';
+  const note = order.delivery_instructions?.trim() || '';
+
+  const lines = [
+    `<b>New paid order — ${telegramEscape(order.order_number)}</b>`,
+    '',
+    '<b>Customer</b>',
+    `Name: ${telegramEscape(order.customer_name || '—')}`,
+    `Phone: ${telegramEscape(order.customer_phone || '—')}`,
+    `Email: ${telegramEscape(order.customer_email || '—')}`,
+    '',
+    '<b>Order</b>',
+    `Type: ${orderType}`,
+    `Address: ${telegramEscape(address)}`,
+  ];
+  if (note) lines.push(`Note: ${telegramEscape(note)}`);
+  lines.push('', '<b>Items</b>', telegramEscape(formatItems(order.items)));
+  lines.push('', '<b>Fees</b>', telegramEscape(formatTotalsText(order)));
+  lines.push('', 'Payment: Paid via Kora');
+  return lines.join('\n');
+}
+
+/** Owner kitchen alert on Telegram after Kora payment is confirmed. Never throws. */
+export async function sendOwnerTelegramAlert(order: OrderEmailPayload): Promise<boolean> {
+  const token = Deno.env.get('TELEGRAM_BOT_TOKEN')?.trim();
+  const chatId = Deno.env.get('TELEGRAM_CHAT_ID')?.trim();
+  if (!token || !chatId) {
+    console.error('Telegram alert skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not set');
+    return false;
+  }
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: buildOwnerTelegramMessage(order),
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error('Telegram owner alert failed', res.status, body);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Telegram owner alert failed', err);
+    return false;
+  }
+}
+
 /**
  * After admin confirms OPay payment:
  * Customer thank-you only (Truehost SMTP).
@@ -537,6 +601,7 @@ export async function sendCustomerConfirmationEmail(
  * Prefer sendCustomerConfirmationEmail for admin “Payment received”.
  */
 export async function sendOrderPaidEmails(order: OrderEmailPayload): Promise<boolean> {
+  await sendOwnerTelegramAlert(order);
   await sendOwnerFormSubmitAlert(order);
   return await sendCustomerThankYou(order);
 }
@@ -655,6 +720,7 @@ export function orderEmailFromCompleteResult(result: {
     customer_email: String(o.customer_email ?? ''),
     order_type: String(o.order_type ?? 'PICKUP'),
     delivery_address: (o.delivery_address as string | null) ?? null,
+    delivery_instructions: (o.delivery_instructions as string | null) ?? null,
     subtotal: Number(o.subtotal ?? 0),
     tax: Number(o.tax ?? 0),
     delivery_fee: Number(o.delivery_fee ?? 0),
