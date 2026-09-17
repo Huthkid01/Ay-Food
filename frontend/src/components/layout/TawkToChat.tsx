@@ -4,9 +4,13 @@ import { useLocation } from 'react-router-dom';
 declare global {
   interface Window {
     Tawk_API?: {
+      autoStart?: boolean;
       hideWidget?: () => void;
       showWidget?: () => void;
+      minimize?: () => void;
+      start?: (options?: { showWidget?: boolean }) => void;
       onLoad?: () => void;
+      onChatMaximized?: () => void;
       customStyle?: Record<string, unknown>;
     };
     Tawk_LoadStart?: Date;
@@ -14,11 +18,56 @@ declare global {
 }
 
 const TAWK_SRC = 'https://embed.tawk.to/6a65570b15ab181d4e3c7bf2/1judto3bv';
+const PREVIEW_STYLE_ID = 'tawk-hide-greeting-preview';
+
+function hideTawkPreviewBubbles() {
+  document.querySelectorAll('iframe').forEach((iframe) => {
+    const title = (iframe.getAttribute('title') || '').toLowerCase();
+    const name = (iframe.getAttribute('name') || '').toLowerCase();
+    const id = (iframe.id || '').toLowerCase();
+    const isPreview =
+      title.includes('bubble') ||
+      title.includes('preview') ||
+      title.includes('popup') ||
+      title.includes('greeting') ||
+      title.includes('message from') ||
+      name.includes('bubble') ||
+      id.includes('bubble');
+    if (!isPreview) return;
+    iframe.style.setProperty('display', 'none', 'important');
+    iframe.style.setProperty('visibility', 'hidden', 'important');
+    iframe.style.setProperty('pointer-events', 'none', 'important');
+    iframe.style.setProperty('opacity', '0', 'important');
+  });
+}
+
+function injectPreviewCss() {
+  if (document.getElementById(PREVIEW_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = PREVIEW_STYLE_ID;
+  style.textContent = `
+    iframe[title*="bubble" i],
+    iframe[title*="preview" i],
+    iframe[title*="popup" i],
+    iframe[title*="greeting" i],
+    iframe[title*="message from" i] {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      opacity: 0 !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 function loadTawkScript() {
   if (document.getElementById('tawk-to-script')) return;
   window.Tawk_API = window.Tawk_API || {};
   window.Tawk_LoadStart = new Date();
+  // Do not auto-connect: Tawk triggers fire the welcome popup as soon as the socket starts.
+  window.Tawk_API.autoStart = false;
   window.Tawk_API.customStyle = {
     visibility: {
       desktop: { position: 'br', xOffset: 16, yOffset: 16 },
@@ -44,8 +93,8 @@ function runWhenIdle(fn: () => void, timeoutMs = 4000) {
 }
 
 /**
- * Loads Tawk after first paint / idle so it doesn't compete with LCP.
- * Hides chat on admin — never when the cart opens.
+ * Loads Tawk after first paint so the site content shows first.
+ * Keeps the chat button, but does not auto-open the welcome popup.
  */
 export function TawkToChat() {
   const { pathname } = useLocation();
@@ -53,6 +102,7 @@ export function TawkToChat() {
 
   useEffect(() => {
     if (isAdmin) return;
+    injectPreviewCss();
     let cancelled = false;
     const cancelIdle = runWhenIdle(() => {
       if (!cancelled) loadTawkScript();
@@ -64,26 +114,47 @@ export function TawkToChat() {
   }, [isAdmin]);
 
   useEffect(() => {
+    let connected = false;
+    let userOpened = false;
+    const observer = new MutationObserver(() => hideTawkPreviewBubbles());
+    observer.observe(document.body, { childList: true, subtree: true });
+
     const apply = () => {
       const api = window.Tawk_API;
       if (!api) return;
-      if (isAdmin) api.hideWidget?.();
-      else api.showWidget?.();
+      if (isAdmin) {
+        api.hideWidget?.();
+        return;
+      }
+      api.showWidget?.();
+      if (!userOpened) api.minimize?.();
+      hideTawkPreviewBubbles();
     };
 
     apply();
 
     const api = window.Tawk_API || (window.Tawk_API = {});
-    const prev = api.onLoad;
+    const prevLoad = api.onLoad;
     api.onLoad = () => {
-      prev?.();
+      prevLoad?.();
+      if (!isAdmin && !connected) {
+        connected = true;
+        api.start?.({ showWidget: true });
+      }
       apply();
     };
 
-    const id = window.setInterval(apply, 500);
-    const stop = window.setTimeout(() => window.clearInterval(id), 4000);
+    const prevMaximized = api.onChatMaximized;
+    api.onChatMaximized = () => {
+      prevMaximized?.();
+      userOpened = true;
+    };
+
+    const id = window.setInterval(apply, 400);
+    const stop = window.setTimeout(() => window.clearInterval(id), 8000);
 
     return () => {
+      observer.disconnect();
       window.clearInterval(id);
       window.clearTimeout(stop);
     };
