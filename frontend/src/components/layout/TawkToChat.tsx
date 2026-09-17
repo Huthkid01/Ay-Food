@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 declare global {
@@ -11,7 +11,6 @@ declare global {
       start?: (options?: { showWidget?: boolean }) => void;
       onLoad?: () => void;
       onChatMaximized?: () => void;
-      onChatMinimized?: () => void;
       customStyle?: Record<string, unknown>;
     };
     Tawk_LoadStart?: Date;
@@ -117,7 +116,6 @@ function runWhenIdle(fn: () => void, timeoutMs = 4000) {
 export function TawkToChat() {
   const { pathname } = useLocation();
   const isAdmin = pathname.startsWith('/admin') || pathname === '/login';
-  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     if (isAdmin) return;
@@ -167,13 +165,6 @@ export function TawkToChat() {
     api.onChatMaximized = () => {
       prevMaximized?.();
       userOpened = true;
-      setChatOpen(true);
-    };
-
-    const prevMinimized = api.onChatMinimized;
-    api.onChatMinimized = () => {
-      prevMinimized?.();
-      setChatOpen(false);
     };
 
     const id = window.setInterval(apply, 400);
@@ -186,19 +177,5 @@ export function TawkToChat() {
     };
   }, [isAdmin]);
 
-  if (isAdmin || chatOpen) return null;
-
-  return (
-    <div
-      className="pointer-events-none fixed z-[2147483000] max-w-[7.5rem] text-right"
-      style={{
-        right: 'max(0.75rem, env(safe-area-inset-right))',
-        bottom: 'calc(4.75rem + env(safe-area-inset-bottom))',
-      }}
-    >
-      <span className="inline-block rounded-full bg-brand-gold px-2.5 py-1 text-[11px] font-semibold leading-tight text-white shadow-lg">
-        Customer support
-      </span>
-    </div>
-  );
+  return null;
 }
