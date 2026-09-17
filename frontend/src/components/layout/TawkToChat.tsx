@@ -7,6 +7,7 @@ declare global {
       hideWidget?: () => void;
       showWidget?: () => void;
       minimize?: () => void;
+      maximize?: () => void;
       onLoad?: () => void;
       onChatMaximized?: () => void;
       onChatMinimized?: () => void;
@@ -19,6 +20,7 @@ declare global {
 const TAWK_SRC = 'https://embed.tawk.to/6a65570b15ab181d4e3c7bf2/1judto3bv';
 const HIDDEN_ATTR = 'data-ay-tawk-overlay-hidden';
 const STYLE_ID = 'ay-tawk-hide-outside-popups';
+const CATCHER_ID = 'ay-tawk-open-catcher';
 
 function isTawkIframe(iframe: HTMLIFrameElement) {
   const title = (iframe.getAttribute('title') || '').toLowerCase();
@@ -56,7 +58,7 @@ function restoreOverlay(el: HTMLElement) {
 }
 
 function isLauncherRect(rect: DOMRect) {
-  return rect.width > 0 && rect.width <= 90 && rect.height <= 90;
+  return rect.width > 8 && rect.width <= 90 && rect.height > 8 && rect.height <= 90;
 }
 
 function isFullChatRect(rect: DOMRect) {
@@ -65,7 +67,7 @@ function isFullChatRect(rect: DOMRect) {
 
 function isPagePopupRect(rect: DOMRect) {
   if (rect.width < 1 || rect.height < 1) return false;
-  if (isLauncherRect(rect) || isFullChatRect(rect)) return false;
+  if (isLauncherRect(rect)) return false;
   return (
     rect.right > window.innerWidth - 440 &&
     rect.bottom > window.innerHeight - 520 &&
@@ -73,18 +75,40 @@ function isPagePopupRect(rect: DOMRect) {
   );
 }
 
-/** Keep the round button. Hide welcome/shortcut cards that sit on the page. */
-function hideExternalTawkOverlays() {
-  document.querySelectorAll('iframe').forEach((node) => {
+function findLauncherIframe() {
+  return [...document.querySelectorAll('iframe')].find((node) => {
     const iframe = node as HTMLIFrameElement;
+    const rect = iframe.getBoundingClientRect();
+    return isLauncherRect(rect) && (isTawkIframe(iframe) || rect.right > window.innerWidth - 140);
+  }) as HTMLIFrameElement | undefined;
+}
+
+/**
+ * Keep the round button. Hide welcome / shortcut cards that sit on the page.
+ * Do not hide the main widget iframe when it is the only Tawk frame and currently maximized —
+ * Tawk_API.minimize() shrinks that one back into the button.
+ */
+function hideExternalTawkOverlays() {
+  const iframes = [...document.querySelectorAll('iframe')] as HTMLIFrameElement[];
+  const hasLauncher = Boolean(findLauncherIframe());
+
+  iframes.forEach((iframe) => {
     const rect = iframe.getBoundingClientRect();
     if (isLauncherRect(rect)) {
       restoreOverlay(iframe);
       return;
     }
-    if (isTawkIframe(iframe) || isPagePopupRect(rect)) {
-      hideOverlay(iframe);
+
+    const tawk = isTawkIframe(iframe);
+    const popup = isPagePopupRect(rect);
+    if (!tawk && !popup) return;
+
+    if (!hasLauncher && tawk && isFullChatRect(rect)) {
+      restoreOverlay(iframe);
+      return;
     }
+
+    hideOverlay(iframe);
   });
 }
 
@@ -144,9 +168,46 @@ function runWhenIdle(fn: () => void, timeoutMs = 4000) {
   return () => window.clearTimeout(id);
 }
 
+function ensureCatcher(onOpen: () => void) {
+  let catcher = document.getElementById(CATCHER_ID) as HTMLButtonElement | null;
+  if (!catcher) {
+    catcher = document.createElement('button');
+    catcher.id = CATCHER_ID;
+    catcher.type = 'button';
+    catcher.setAttribute('aria-label', 'Open chat');
+    catcher.style.cssText =
+      'position:fixed;z-index:2147483646;padding:0;margin:0;border:0;background:transparent;cursor:pointer;';
+    document.body.appendChild(catcher);
+  }
+  catcher.onclick = onOpen;
+  return catcher;
+}
+
+function syncCatcher(catcher: HTMLButtonElement, userOpened: boolean, isAdmin: boolean) {
+  if (userOpened || isAdmin) {
+    catcher.style.display = 'none';
+    return;
+  }
+
+  const launcher = findLauncherIframe();
+  const size = 64;
+  const xOffset = 16;
+  const yOffset = 16;
+  const rect = launcher
+    ? launcher.getBoundingClientRect()
+    : new DOMRect(window.innerWidth - size - xOffset, window.innerHeight - size - yOffset, size, size);
+
+  catcher.style.display = 'block';
+  catcher.style.left = `${Math.round(rect.left)}px`;
+  catcher.style.top = `${Math.round(rect.top)}px`;
+  catcher.style.width = `${Math.round(rect.width)}px`;
+  catcher.style.height = `${Math.round(rect.height)}px`;
+}
+
 /**
  * Site content shows first. Chat button stays.
  * Welcome / shortcut cards must not sit on the page, including after leaving and coming back.
+ * Full chat opens only when the visitor clicks the button.
  */
 export function TawkToChat() {
   const { pathname } = useLocation();
@@ -167,15 +228,43 @@ export function TawkToChat() {
 
   useEffect(() => {
     let userOpened = false;
+    let burstTimer = 0;
+    let burstUntil = 0;
+    let raf = 0;
+
+    const catcher = ensureCatcher(() => {
+      userOpened = true;
+      catcher.style.display = 'none';
+      restoreExternalTawkOverlays();
+      window.Tawk_API?.showWidget?.();
+      window.Tawk_API?.maximize?.();
+    });
 
     const collapseToButton = () => {
       userOpened = false;
       window.Tawk_API?.minimize?.();
       hideExternalTawkOverlays();
+      syncCatcher(catcher, userOpened, isAdmin);
+    };
+
+    const burstCollapse = (ms = 2500) => {
+      burstUntil = Date.now() + ms;
+      const tick = () => {
+        if (userOpened) return;
+        collapseToButton();
+        if (Date.now() < burstUntil) {
+          raf = window.requestAnimationFrame(tick);
+        }
+      };
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(burstTimer);
+      tick();
+      burstTimer = window.setTimeout(() => collapseToButton(), ms);
     };
 
     const observer = new MutationObserver(() => {
       if (!userOpened) hideExternalTawkOverlays();
+      syncCatcher(catcher, userOpened, isAdmin);
     });
     observer.observe(document.body, {
       childList: true,
@@ -186,9 +275,13 @@ export function TawkToChat() {
 
     const apply = () => {
       const api = window.Tawk_API;
-      if (!api) return;
+      if (!api) {
+        syncCatcher(catcher, userOpened, isAdmin);
+        return;
+      }
       if (isAdmin) {
         api.hideWidget?.();
+        catcher.style.display = 'none';
         return;
       }
       api.showWidget?.();
@@ -198,6 +291,7 @@ export function TawkToChat() {
       } else {
         restoreExternalTawkOverlays();
       }
+      syncCatcher(catcher, userOpened, isAdmin);
     };
 
     apply();
@@ -206,14 +300,18 @@ export function TawkToChat() {
     const prevLoad = api.onLoad;
     api.onLoad = () => {
       prevLoad?.();
-      collapseToButton();
+      burstCollapse(2000);
     };
 
     const prevMaximized = api.onChatMaximized;
     api.onChatMaximized = () => {
       prevMaximized?.();
-      userOpened = true;
+      if (!userOpened) {
+        collapseToButton();
+        return;
+      }
       restoreExternalTawkOverlays();
+      syncCatcher(catcher, userOpened, isAdmin);
     };
 
     const prevMinimized = api.onChatMinimized;
@@ -223,11 +321,7 @@ export function TawkToChat() {
     };
 
     const onReturnToPage = () => {
-      const fullChatOpen = [...document.querySelectorAll('iframe')].some((node) =>
-        isFullChatRect((node as HTMLIFrameElement).getBoundingClientRect()),
-      );
-      if (fullChatOpen) return;
-      collapseToButton();
+      burstCollapse(3000);
     };
 
     const onVisible = () => {
@@ -236,16 +330,19 @@ export function TawkToChat() {
 
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('pageshow', onReturnToPage);
-    window.addEventListener('focus', onReturnToPage);
+    window.addEventListener('resize', apply);
 
-    const id = window.setInterval(apply, 500);
+    const id = window.setInterval(apply, 400);
 
     return () => {
       observer.disconnect();
       window.clearInterval(id);
+      window.clearTimeout(burstTimer);
+      window.cancelAnimationFrame(raf);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('pageshow', onReturnToPage);
-      window.removeEventListener('focus', onReturnToPage);
+      window.removeEventListener('resize', apply);
+      catcher.remove();
     };
   }, [isAdmin]);
 
